@@ -737,6 +737,7 @@ class BertForMaskedLM(PreTrainedBertModel):
                 imp_pos=imp_pos,
                 imp_op=imp_op,
             )  # (batch, max_len, hidden_size), (batch, max_len, ffn_size)
+        # tgt_pos 指定token位置
         last_hidden = last_hidden[:, tgt_pos, :]  # (batch, hidden_size) ([20, 768]) 最后一个模块的输出
         ffn_weights = ffn_weights[:, tgt_pos, :]  # (batch, ffn_size)
         tgt_logits = self.cls(last_hidden)  # (batch, n_vocab) 交给分类器后的输出
