@@ -358,7 +358,8 @@ def main():
                             res_dict['base'].append(ffn_weights.squeeze().tolist())
 
                     if args.get_ig_gold:
-                        res_dict['ig_gold'] = convert_to_triplet_ig(res_dict['ig_gold'])
+                        res_dict['ig_gold'] = convert_to_triplet_ig_top(res_dict['ig_gold'])
+                        # res_dict['ig_gold'] = convert_to_triplet_ig(res_dict['ig_gold'])
                     if args.get_base:
                         res_dict['base'] = convert_to_triplet_ig(res_dict['base'])
 
