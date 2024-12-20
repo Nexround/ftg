@@ -328,7 +328,8 @@ def main():
                         tokens_info['pred_obj'] = tokenizer.convert_ids_to_tokens(pred_label)
                         scaled_weights, weights_step = scaled_input(ffn_weights, args.batch_size, args.num_batch)  # (num_points, ffn_size), (ffn_size)
                         scaled_weights.requires_grad_(True)
-
+                        # 先拿到每个神经元的激活值，然后再计算IG
+                        # 分层计算IG
                         # integrated grad at the pred label for each layer
                         if args.get_ig_pred:
                             ig_pred = None
@@ -347,6 +348,7 @@ def main():
                             for batch_idx in range(args.num_batch):
                                 batch_weights = scaled_weights[batch_idx * args.batch_size:(batch_idx + 1) * args.batch_size]
                                 # 通过修改特定位置的神经元权重（或特征值），观察其对模型输出的影响
+                                # grad [20, 3072]
                                 _, grad = model(input_ids=input_ids, attention_mask=input_mask, token_type_ids=segment_ids, tgt_pos=tgt_pos, tgt_layer=tgt_layer, tmp_score=batch_weights, tgt_label=gold_label)  # (batch, n_vocab), (batch, ffn_size)
                                 grad_summed = grad.sum(dim=0)  # (ffn_size)
                                 ig_gold = grad_summed if ig_gold is None else torch.add(ig_gold, grad_summed)  # (ffn_size)
