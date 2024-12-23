@@ -17,7 +17,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import BertTokenizer
 from custom_bert import BertForMaskedLM
-from lib.func import scaled_input, convert_to_triplet_ig_top, extract_random_samples
+from module.func import scaled_input, convert_to_triplet_ig_top, extract_random_samples
 
 # set logger
 logging.basicConfig(
