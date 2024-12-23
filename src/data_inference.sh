@@ -9,6 +9,5 @@ python ./src/data_inference.py \
     --get_ig_gold \
     --batch_size 20 \
     --num_batch 1 \
-    --pt_relation $1 \
     --debug 100000 \
     --num_sample 100
