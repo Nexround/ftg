@@ -1,4 +1,3 @@
-# 3.一个方法，接受指定神经元的激活值，并在模型中修改该神经元的激活值，在其他神经元激活值不变的情况下重新推理
 from transformers import BertForMaskedLM
 import torch
 import torch.nn as nn
@@ -7,12 +6,13 @@ import torch.nn as nn
 class CustomBertForMaskedLM(BertForMaskedLM):
     def __init__(self, config):
         super().__init__(config)
-        self.intermediate_activations = []
+        self._intermediate_activations = []
+        self._mask_logits = None
 
     def forward(self, *args, **kwargs):
         # Hook to capture intermediate activations
         def hook_fn(module, input, output):
-            self.intermediate_activations.append(output.detach().cpu())
+            self._intermediate_activations.append(output.detach().cpu())
 
         # Register hooks on intermediate layers
         hooks = []
@@ -54,6 +54,54 @@ class CustomBertForMaskedLM(BertForMaskedLM):
         Returns the intermediate neuron activations from the last forward pass.
         Raises an error if intermediate_activations is empty.
         """
-        if not self.intermediate_activations:
-            raise ValueError("Intermediate activations are empty. Ensure that a forward pass has been performed.")
-        return self.intermediate_activations
+        if not self._intermediate_activations:
+            raise ValueError(
+                "Intermediate activations are empty. Ensure that a forward pass has been performed."
+            )
+        return self._intermediate_activations
+
+    @property
+    def mask_logits(self):
+        """
+        Returns the logits at [MASK] positions from the last forward pass.
+        Raises an error if _mask_logits is None.
+        """
+        if self._mask_logits is None:
+            raise ValueError(
+                "Mask logits are not available. Ensure that a forward pass has been performed with [MASK] tokens."
+            )
+        return self._mask_logits
+
+    def modify_ffn_activation(self, layer_idx, target_position, new_activation):
+        """
+        Modifies the hidden activations of a specific FFN layer at a specific position in the model.
+
+        Args:
+            layer_idx (int): Index of the transformer layer to modify (0-indexed).
+            target_position (tuple): A tuple specifying the target position (batch_idx, seq_idx).
+            new_activation (torch.Tensor): The new activation values with shape matching the FFN layer output
+                                            (e.g., [intermediate_size]).
+        """
+        if not isinstance(new_activation, torch.Tensor):
+            raise ValueError("new_activation must be a torch.Tensor.")
+
+        def hook_fn(module, input, output):
+            # Ensure the shape matches
+            batch_idx, seq_idx = target_position
+            if new_activation.shape != output[batch_idx, seq_idx].shape:
+                raise ValueError(
+                    f"Shape mismatch: Expected {output[batch_idx, seq_idx].shape}, "
+                    f"but got {new_activation.shape}."
+                )
+
+            # Modify the activation at the target position
+            output = output.clone()  # Clone to avoid in-place modification
+            output[batch_idx, seq_idx] = new_activation
+            return output
+
+        # Register the hook
+        hook = self.bert.encoder.layer[layer_idx].intermediate.register_forward_hook(
+            hook_fn
+        )
+
+        return hook  # Return the hook handle for later removal if needed
