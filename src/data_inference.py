@@ -180,6 +180,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_batch", default=10, type=int, help="Num batch of an example."
     )
+    parser.add_argument(
+        "--num_sample", default=10, type=int, help="Num batch of an example."
+    )
 
     # parse arguments
     args = parser.parse_args()

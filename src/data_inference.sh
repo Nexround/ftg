@@ -11,3 +11,4 @@ python data_inference.py \
     --num_batch 1 \
     --pt_relation $1 \
     --debug 100000 \
+    --num_sample 100
