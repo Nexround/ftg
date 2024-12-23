@@ -237,7 +237,7 @@ if __name__ == "__main__":
 
     dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
     # sample_text = [i for i in dataset["train"]["text"][10:15] if i.strip() != ""]
-    sample_text = extract_random_samples(dataset, 3)
+    sample_text = extract_random_samples(dataset, args.num_sample)
     # evaluate args.debug bags for each relation
 
     res_dict_bag = []
