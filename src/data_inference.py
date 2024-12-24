@@ -350,6 +350,6 @@ if __name__ == "__main__":
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
 
     with jsonlines.open(
-        os.path.join(args.output_dir, args.result_file + ".jsonl"), "w"
+        os.path.join(args.output_dir, args.result_file), "w"
     ) as fw:
         fw.write(res_dict_bag)
