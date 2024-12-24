@@ -8,5 +8,5 @@ python ./src/data_inference.py \
 --num_batch 1 \
 --debug 100000 \
 --num_sample 10000 \
---result_file ./results/imdb.json\
---dataset "imdb"
+--result_file ./results/imdb.json \
+--dataset imdb

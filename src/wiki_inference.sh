@@ -8,5 +8,5 @@ python ./src/data_inference.py \
 --num_batch 1 \
 --debug 100000 \
 --num_sample 10000 \
---result_file ./results/wiki.json\
+--result_file ./results/wiki.json \
 --dataset "wikitext, wikitext-2-raw-v1"
