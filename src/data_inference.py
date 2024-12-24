@@ -89,15 +89,9 @@ RETENTION_THRESHOLD = 99
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    def parse_tuple(input_string):
-        try:
-            parsed = ast.literal_eval(input_string)
-            if isinstance(parsed, tuple):
-                return parsed
-        except:
-            raise argparse.ArgumentTypeError(
-                "Invalid tuple format. Example: '(1, 2, 3)'"
-            )
+    def parse_comma_separated(input_string):
+        # 将逗号分隔的字符串转换为元组
+        return tuple(input_string.split(','))
 
     parser.add_argument(
         "--bert_model",
@@ -173,7 +167,7 @@ if __name__ == "__main__":
         "--num_sample", default=10, type=int, help="Num batch of an example."
     )
     parser.add_argument("--result_file", type=str)
-    parser.add_argument("--dataset", type=parse_tuple)
+    parser.add_argument("--dataset", type=parse_comma_separated)
 
     # parse arguments
     args = parser.parse_args()
