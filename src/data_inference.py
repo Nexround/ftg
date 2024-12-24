@@ -2,6 +2,7 @@
 BERT MLM runner
 """
 
+from ast import arg
 import random
 import json
 import time
@@ -88,20 +89,14 @@ RETENTION_THRESHOLD = 99
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    # Basic parameters
-    parser.add_argument(
-        "--data_path",
-        default=None,
-        type=str,
-        required=True,
-        help="The input data path. Should be .json file for the MLM task. ",
-    )
-    parser.add_argument(
-        "--tmp_data_path",
-        default=None,
-        type=str,
-        help="Temporary input data path. Should be .json file for the MLM task. ",
-    )
+    def parse_tuple(input_string):
+        try:
+            return eval(input_string)
+        except:
+            raise argparse.ArgumentTypeError(
+                "Invalid tuple format. Example: '(1, 2, 3)'"
+            )
+
     parser.add_argument(
         "--bert_model",
         default=None,
@@ -117,14 +112,6 @@ if __name__ == "__main__":
         required=True,
         help="The output directory where the model predictions and checkpoints will be written.",
     )
-    parser.add_argument(
-        "--output_prefix",
-        default=None,
-        type=str,
-        required=True,
-        help="The output prefix to indentify each running of experiment. ",
-    )
-
     # Other parameters
     parser.add_argument(
         "--max_seq_length",
@@ -183,6 +170,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_sample", default=10, type=int, help="Num batch of an example."
     )
+    parser.add_argument("--result_file", type=str)
+    parser.add_argument("--dataset", type=parse_tuple)
 
     # parse arguments
     args = parser.parse_args()
@@ -191,12 +180,10 @@ if __name__ == "__main__":
     if args.no_cuda or not torch.cuda.is_available():
         device = torch.device("cpu")
         n_gpu = 0
-    elif len(args.gpus) == 1:
+    else:
         device = torch.device("cuda:%s" % args.gpus)
         n_gpu = 1
-    else:
-        # !!! to implement multi-gpus
-        pass
+
     print(
         "device: {} n_gpu: {}, distributed training: {}".format(
             device, n_gpu, bool(n_gpu > 1)
@@ -212,13 +199,6 @@ if __name__ == "__main__":
 
     # save args
     os.makedirs(args.output_dir, exist_ok=True)
-    json.dump(
-        args.__dict__,
-        open(os.path.join(args.output_dir, args.output_prefix + ".args.json"), "w"),
-        sort_keys=True,
-        indent=2,
-    )
-
     # init tokenizer
     tokenizer = BertTokenizer.from_pretrained(
         args.bert_model, do_lower_case=args.do_lower_case
@@ -235,7 +215,8 @@ if __name__ == "__main__":
         model = torch.nn.DataParallel(model)
     model.eval()
 
-    dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+    dataset = load_dataset(*args.dataset)
+    # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
     # sample_text = [i for i in dataset["train"]["text"][10:15] if i.strip() != ""]
     sample_text = extract_random_samples(dataset, args.num_sample)
     # evaluate args.debug bags for each relation
@@ -373,6 +354,6 @@ if __name__ == "__main__":
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
 
     with jsonlines.open(
-        os.path.join(args.output_dir, args.output_prefix + "-" + ".rlt" + ".jsonl"), "w"
+        os.path.join(args.output_dir, args.result_file + ".jsonl"), "w"
     ) as fw:
         fw.write(res_dict_bag)
