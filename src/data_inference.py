@@ -2,7 +2,7 @@
 BERT MLM runner
 """
 
-from ast import arg
+import ast
 import random
 import json
 import time
@@ -91,7 +91,9 @@ if __name__ == "__main__":
 
     def parse_tuple(input_string):
         try:
-            return eval(input_string)
+            parsed = ast.literal_eval(input_string)
+            if isinstance(parsed, tuple):
+                return parsed
         except:
             raise argparse.ArgumentTypeError(
                 "Invalid tuple format. Example: '(1, 2, 3)'"
