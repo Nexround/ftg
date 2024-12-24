@@ -94,3 +94,19 @@ def extract_random_samples(dataset, num_samples):
     random_samples = random.sample(text_data, num_samples)
 
     return random_samples
+
+
+def remove_empty_dimensions(lst):
+    # 如果列表是空的，返回空列表
+    if lst == []:
+        return []
+
+    # 如果列表只有一个元素，且这个元素本身是列表
+    # 就递归地去除其中的空维度
+    if isinstance(lst, list):
+        # 对每个元素调用递归函数
+        lst = [remove_empty_dimensions(item) for item in lst]
+        # 如果这个列表包含的元素为空列表，则去除这个空列表
+        while len(lst) == 1 and isinstance(lst[0], list) and lst[0] == []:
+            lst = lst[0]
+    return lst

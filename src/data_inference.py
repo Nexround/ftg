@@ -366,7 +366,8 @@ if __name__ == "__main__":
             # res_dict['ig_gold'] = convert_to_triplet_ig(res_dict['ig_gold'])
         if args.get_base:
             res_dict["base"] = convert_to_triplet_ig(res_dict["base"])
-        res_dict_bag.append([tokens_info, res_dict])
+        # res_dict_bag.append([tokens_info, res_dict])
+        res_dict_bag.append([res_dict])
         # record running time
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
