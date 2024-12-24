@@ -9,4 +9,4 @@ python ./src/data_inference.py \
 --debug 100000 \
 --num_sample 10000 \
 --result_file ./results/imdb.json\
---dataset '("imdb",)'
+--dataset "(\"imdb\",)"
