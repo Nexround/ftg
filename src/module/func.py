@@ -72,7 +72,7 @@ def convert_to_triplet_ig(ig_list):
 
 def extract_random_samples(dataset, num_samples):
     """
-    从给定的数据集中随机提取指定数量的样本。
+    从给定的数据集中随机提取指定数量的样本，忽略长度为 1 的文本。
 
     参数：
     - dataset: 数据集，需包含类似于 Hugging Face 数据集的结构，带有键 "train" 和 "text"。
@@ -81,8 +81,8 @@ def extract_random_samples(dataset, num_samples):
     返回：
     - 一个包含随机样本的列表。
     """
-    # 获取训练数据中的文本
-    text_data = [text for text in dataset["train"]["text"] if text.strip() != ""]
+    # 获取训练数据中的文本，忽略空文本和长度为 1 的文本
+    text_data = [text for text in dataset["train"]["text"] if text.strip() != "" and len(text.strip()) > 1]
 
     # 检查请求的样本数是否超过数据集大小
     if num_samples > len(text_data):
