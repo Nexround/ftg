@@ -24,17 +24,27 @@ for text in sample_text:
         continue
 
     # 随机选择一个词的位置进行掩盖
-    mask_position = random.randint(0, len(words) - 1)
+    mask_position = random.randint(0, 100)
     masked_positions.append(mask_position)
 
     # 替换选中的位置为 [MASK]
-    masked_sentence = " ".join([
-        word if i != mask_position else "[MASK]" for i, word in enumerate(words)
-    ])
+    masked_sentence = " ".join(
+        [word if i != mask_position else "[MASK]" for i, word in enumerate(words)]
+    )
     masked_texts.append(masked_sentence)
 
+
+def truncate_text(text, tokenizer, max_length=512):
+    tokens = tokenizer.tokenize(text)
+    if len(tokens) > max_length:
+        tokens = tokens[:max_length]
+    return tokenizer.convert_tokens_to_string(tokens)
+
+
+# 对所有句子应用截断
+masked_texts = [truncate_text(text, tokenizer, max_length=200) for text in masked_texts]
 # 5. 使用填充任务的 pipeline 进行推理
-fill_mask = pipeline("fill-mask", model=model, tokenizer=tokenizer, truncation=True)
+fill_mask = pipeline("fill-mask", model=model, tokenizer=tokenizer)
 
 # 6. 对每个掩蔽句子进行推理并保存结果
 predictions = []
