@@ -221,10 +221,12 @@ if __name__ == "__main__":
     for text in tqdm(sample_text):
         # record running time
         tic = time.perf_counter()
-
-        eval_features, tokens_info = example2feature(
-            text, args.max_seq_length, tokenizer
-        )
+        try:
+            eval_features, tokens_info = example2feature(
+                text, args.max_seq_length, tokenizer
+            )
+        except:
+            continue
         # convert features to long type tensors
         baseline_ids, input_ids, input_mask, segment_ids = (
             eval_features["baseline_ids"],
