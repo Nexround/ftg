@@ -34,7 +34,7 @@ for text in sample_text:
     masked_texts.append(masked_sentence)
 
 # 5. 使用填充任务的 pipeline 进行推理
-fill_mask = pipeline("fill-mask", model=model, tokenizer=tokenizer)
+fill_mask = pipeline("fill-mask", model=model, tokenizer=tokenizer, truncation=True)
 
 # 6. 对每个掩蔽句子进行推理并保存结果
 predictions = []
