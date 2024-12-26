@@ -2,6 +2,7 @@ import random
 from datasets import load_dataset
 from transformers import BertForMaskedLM, BertTokenizer, pipeline
 from module.func import extract_random_samples
+from tqdm import tqdm
 
 # 1. 加载 Wikitext 数据集
 # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
@@ -14,49 +15,62 @@ tokenizer = BertTokenizer.from_pretrained(model_name)
 
 sample_text = extract_random_samples(dataset, 100)
 
-# 4. 为了测试准确率，随机将句子中的一个词替换为 [MASK]
-masked_texts = []
-masked_positions = []  # 保存每个句子中被掩盖的位置，便于后续准确率计算
-
-for text in sample_text:
-    words = text.split()
-    if len(words) < 2:  # 确保句子至少有两个词
-        continue
-
-    # 随机选择一个词的位置进行掩盖
-    mask_position = random.randint(0, 10)
-    masked_positions.append(mask_position)
-
-    # 替换选中的位置为 [MASK]
-    masked_sentence = " ".join(
-        [word if i != mask_position else "[MASK]" for i, word in enumerate(words)]
-    )
-    masked_texts.append(masked_sentence)
+MAX_SEQ_LENGTH = 300
+MAX_NUM_TOKENS = MAX_SEQ_LENGTH - 2
 
 
-def truncate_text(text, tokenizer, max_length=512):
-    tokens = tokenizer.tokenize(text)
-    if len(tokens) > max_length:
-        tokens = tokens[:max_length]
-    # return tokens
-    return tokenizer.convert_tokens_to_string(tokens)
+def mask_and_truncate_text(texts, tokenizer, max_length: int = 512) -> str:
+    """
+    对输入文本随机位置添加一个 [MASK] 标签，并根据分词器结果处理截断问题。
+
+    Args:
+        text (str): 输入文本。
+        tokenizer_name (str): 分词器的名称，默认值为 "bert-base-uncased"。
+        max_length (int): 截断的最大长度，默认值为 512。
+
+    Returns:
+        str: 添加了一个 [MASK] 并截断后的文本。
+    """
+    masked_texts = []
+    masked_positions = []  # 保存每个句子中被掩盖的位置，便于后续准确率计算
+    # 将文本分词为 token
+    for text in texts:
+        # tokens = tokenizer.tokenize(text)
+        truncated_text = text.split()[:MAX_NUM_TOKENS]
+
+        # 截断到最大长度
+        # truncated_tokens = tokens[:max_length]
+        # truncated_text = tokenizer.convert_tokens_to_string(truncated_tokens)
+        # truncated_words = truncated_text.split()[:MAX_NUM_TOKENS]
+        # 确保只添加一个 [MASK]
+        mask_position = random.randint(0, len(truncated_text) - 1)
+        masked_sentence = " ".join(
+            [
+                word if i != mask_position else "[MASK]"
+                for i, word in enumerate(truncated_text)
+            ]
+        )
+        masked_positions.append(mask_position)
+        masked_texts.append(masked_sentence)
+
+    return masked_texts, masked_positions
 
 
-# 对所有句子应用截断
-masked_texts = [truncate_text(text, tokenizer, max_length=200) for text in masked_texts]
-# , tokenizer_kwargs=tokenizer_kwargs
-# 5. 使用填充任务的 pipeline 进行推理
-tokenizer_kwargs = {"truncation": True}
-fill_mask = pipeline(
-    "fill-mask", model=model, tokenizer=tokenizer
+masked_texts, masked_positions = mask_and_truncate_text(
+    sample_text, tokenizer, max_length=MAX_SEQ_LENGTH
 )
 
-# 6. 对每个掩蔽句子进行推理并保存结果
-predictions = []
-for masked_sentence in masked_texts:
-    result = fill_mask(masked_sentence)
-    predictions.append(result)
+fill_mask = pipeline("fill-mask", model=model, tokenizer=tokenizer)
 
+batch_size = 2  # 根据 GPU 内存调整批量大小
+batched_texts = [
+    masked_texts[i : i + batch_size] for i in range(0, len(masked_texts), batch_size)
+]
+
+predictions = []
+for batch in tqdm(batched_texts, desc="Processing batches"):
+    results = fill_mask(batch)
+    predictions.extend(results)
 # 7. 计算准确率
 correct_predictions = 0
 total_predictions = 0
