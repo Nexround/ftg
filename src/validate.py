@@ -5,44 +5,63 @@ from module.func import extract_random_samples
 from tqdm import tqdm
 import argparse
 from module.func import parse_comma_separated
+from typing import List, Tuple, Any
 
 MAX_SEQ_LENGTH = 300
 MAX_NUM_TOKENS = MAX_SEQ_LENGTH - 2
 
 
-def mask_and_truncate_text(texts, tokenizer, max_length: int = 512) -> str:
+def mask_and_truncate_text(
+    texts: List[str],
+    tokenizer: Any,
+    max_length: int = 512,
+    mask_token: str = "[MASK]"
+) -> Tuple[List[str], List[int]]:
     """
     对输入文本随机位置添加一个 [MASK] 标签，并根据分词器结果处理截断问题。
 
     Args:
-        text (str): 输入文本。
-        tokenizer_name (str): 分词器的名称，默认值为 "bert-base-uncased"。
+        texts (List[str]): 输入文本列表。
+        tokenizer (Any): 分词器对象。
         max_length (int): 截断的最大长度，默认值为 512。
+        mask_token (str): 掩码符号，默认值为 "[MASK]"。
 
     Returns:
-        str: 添加了一个 [MASK] 并截断后的文本。
+        Tuple[List[str], List[int]]: 
+            - 添加了一个 [MASK] 并截断后的文本列表。
+            - 每个文本中被掩盖的单词索引位置列表。
     """
     masked_texts = []
-    masked_positions = []  # 保存每个句子中被掩盖的位置，便于后续准确率计算
-    # 将文本分词为 token
-    for text in texts:
-        # tokens = tokenizer.tokenize(text)
-        truncated_text = text.split()[:MAX_NUM_TOKENS]
+    masked_positions = []
 
-        # 截断到最大长度
-        # truncated_tokens = tokens[:max_length]
-        # truncated_text = tokenizer.convert_tokens_to_string(truncated_tokens)
-        # truncated_words = truncated_text.split()[:MAX_NUM_TOKENS]
-        # 确保只添加一个 [MASK]
-        mask_position = random.randint(0, len(truncated_text) - 1)
-        masked_sentence = " ".join(
-            [
-                word if i != mask_position else "[MASK]"
-                for i, word in enumerate(truncated_text)
-            ]
-        )
-        masked_positions.append(mask_position)
+    for text in texts:
+        if not text.strip():  # 跳过空字符串
+            continue
+
+        # 对文本进行分词并截断到最大长度
+        tokens = tokenizer.tokenize(text)
+        truncated_tokens = tokens[:max_length]
+        
+        # 确保文本非空
+        if not truncated_tokens:
+            masked_texts.append("")
+            masked_positions.append(-1)
+            continue
+
+        # 确定 [MASK] 的随机位置
+        mask_position = random.randint(0, len(truncated_tokens) - 1)
+
+        # 替换指定位置的 token 为 [MASK]
+        masked_tokens = [
+            mask_token if i == mask_position else token
+            for i, token in enumerate(truncated_tokens)
+        ]
+
+        # 将 tokens 转换回字符串形式
+        masked_sentence = tokenizer.convert_tokens_to_string(masked_tokens)
+
         masked_texts.append(masked_sentence)
+        masked_positions.append(mask_position)
 
     return masked_texts, masked_positions
 
