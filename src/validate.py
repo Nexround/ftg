@@ -83,6 +83,11 @@ def mask_and_truncate_text(
 
     return masked_texts, masked_positions
 
+# 定义一个函数，用于将文本转换为小写
+def lowercase_text(batch):
+    batch["text"] = batch["text"].lower()  # 假设文本字段是 "text"
+    return batch
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -107,6 +112,7 @@ if __name__ == "__main__":
     # 1. 加载 Wikitext 数据集
     # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
     dataset = load_dataset(*args.dataset)
+    dataset = dataset.map(lowercase_text)
 
     # 2. 加载 BERT tokenizer 和模型
     model_name = "bert-base-uncased"  # 你也可以选择其他的预训练 BERT 模型
