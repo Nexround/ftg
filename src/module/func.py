@@ -70,6 +70,11 @@ def convert_to_triplet_ig(ig_list):
     return ig_triplet
 
 
+def parse_comma_separated(input_string):
+    # 将逗号分隔的字符串转换为元组
+    return tuple(input_string.split(","))
+
+
 def extract_random_samples(dataset, num_samples):
     """
     从给定的数据集中随机提取指定数量的样本，忽略长度为 1 的文本。
@@ -82,7 +87,11 @@ def extract_random_samples(dataset, num_samples):
     - 一个包含随机样本的列表。
     """
     # 获取训练数据中的文本，忽略空文本和长度为 1 的文本
-    text_data = [text for text in dataset["train"]["text"] if text.strip() != "" and len(text.strip()) > 1]
+    text_data = [
+        text
+        for text in dataset["train"]["text"]
+        if text.strip() != "" and len(text.strip()) > 1
+    ]
 
     # 检查请求的样本数是否超过数据集大小
     if num_samples > len(text_data):

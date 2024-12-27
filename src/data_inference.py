@@ -18,7 +18,7 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import BertTokenizer
 from custom_bert import BertForMaskedLM
-from module.func import scaled_input, convert_to_triplet_ig_top, extract_random_samples
+from module.func import scaled_input, convert_to_triplet_ig_top, extract_random_samples, parse_comma_separated
 
 # set logger
 logging.basicConfig(
@@ -88,10 +88,6 @@ RETENTION_THRESHOLD = 99
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-
-    def parse_comma_separated(input_string):
-        # 将逗号分隔的字符串转换为元组
-        return tuple(input_string.split(','))
 
     parser.add_argument(
         "--bert_model",
