@@ -111,7 +111,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # 1. 加载 Wikitext 数据集
     # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-    dataset = load_dataset(*args.dataset)
+    dataset = load_dataset(*args.dataset, trust_remote_code=True)
     dataset = dataset.map(lowercase_text, batched=True)
 
     # 2. 加载 BERT tokenizer 和模型
