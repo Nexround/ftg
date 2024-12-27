@@ -85,7 +85,7 @@ def mask_and_truncate_text(
 
 # 定义一个函数，用于将文本转换为小写
 def lowercase_text(batch):
-    batch["text"] = batch["text"].lower()  # 假设文本字段是 "text"
+    batch["text"] = [text.lower() for text in batch["text"]]  # 遍历列表并对每个元素调用 lower()
     return batch
 
 if __name__ == "__main__":
