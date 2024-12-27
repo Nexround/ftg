@@ -117,20 +117,24 @@ if __name__ == "__main__":
 
     # 计算每个掩蔽位置的准确性
     for idx, masked_sentence in enumerate(masked_texts):
+        # 对原始文本进行分词
         original_text = sample_text[idx]
-        words = original_text.split()
+        original_tokens = tokenizer.tokenize(original_text)
 
-        # 获取掩蔽位置的原始词
+        # 获取掩蔽位置的原始 token
         mask_position = masked_positions[idx]
-        masked_word = words[mask_position]
+        if mask_position == -1 or mask_position >= len(original_tokens):
+            # 跳过无效掩码位置
+            continue
 
-        # 获取预测的单词
-        predicted_word = predictions[idx][0]["token_str"]  # 选择得分最高的预测
+        masked_token = original_tokens[mask_position]
 
-        # 如果预测的单词和原单词相同，则为正确预测
-        if predicted_word == masked_word:
+        # 获取预测的 token
+        predicted_token = predictions[idx][0]["token_str"]  # 选择得分最高的预测
+
+        # 如果预测的 token 和原 token 相同，则为正确预测
+        if predicted_token == masked_token:
             correct_predictions += 1
         total_predictions += 1
-
     accuracy = correct_predictions / total_predictions
     print(f"\nAccuracy: {accuracy * 100:.2f}%")
