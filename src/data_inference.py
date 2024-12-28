@@ -162,6 +162,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_sample", default=10, type=int, help="Num batch of an example."
     )
+    parser.add_argument(
+        "--retention_threshold", default=99, type=int, help="Num batch of an example."
+    )
     parser.add_argument("--result_file", type=str)
     parser.add_argument("--dataset", type=parse_comma_separated)
 
@@ -337,10 +340,10 @@ if __name__ == "__main__":
                 res_dict["base"].append(ffn_weights.squeeze().tolist())
 
         if args.get_ig_gold:
-            res_dict["ig_gold"] = convert_to_triplet_ig_top(res_dict["ig_gold"])
+            res_dict["ig_gold"] = convert_to_triplet_ig_top(res_dict["ig_gold"], args.retention_threshold)
             # res_dict['ig_gold'] = convert_to_triplet_ig(res_dict['ig_gold'])
-        if args.get_base:
-            res_dict["base"] = convert_to_triplet_ig(res_dict["base"])
+        # if args.get_base:
+        #     res_dict["base"] = convert_to_triplet_ig(res_dict["base"])
         # res_dict_bag.append([tokens_info, res_dict])
         res_dict_bag.append([res_dict])
         # record running time

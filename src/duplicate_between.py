@@ -10,6 +10,7 @@ parser.add_argument("--j1", help="Path to the first JSONL file")
 parser.add_argument("--j2", help="Path to the second JSONL file")
 args = parser.parse_args()
 
+
 def extract_coordinates(jsonl_file):
     """Extract coordinates from a JSONL file."""
     data = []
@@ -24,6 +25,7 @@ def extract_coordinates(jsonl_file):
         coordinates.extend([(item[0], item[1]) for item in entry["ig_gold"]])
     return coordinates
 
+
 # Extract coordinates from both files
 coordinates_file1 = extract_coordinates(args.j1)
 coordinates_file2 = extract_coordinates(args.j2)
@@ -31,6 +33,13 @@ coordinates_file2 = extract_coordinates(args.j2)
 # Count occurrences in both files
 counter_file1 = Counter(coordinates_file1)
 counter_file2 = Counter(coordinates_file2)
+
+for key in list(counter_file1.keys()):
+    if counter_file1[key] == 1:
+        del counter_file1[key]
+for key in list(counter_file2.keys()):
+    if counter_file2[key] == 1:
+        del counter_file2[key]
 
 # Find duplicates between the two files
 total_coordinates_combined = set(coordinates_file1) | set(coordinates_file2)
@@ -42,9 +51,17 @@ total_coordinates_file2 = len(set(coordinates_file2))
 total_coordinates_combined = len(total_coordinates_combined)
 
 # Calculate duplicate ratios
-duplicate_ratio_file1 = duplicate_count / total_coordinates_file1 if total_coordinates_file1 > 0 else 0
-duplicate_ratio_file2 = duplicate_count / total_coordinates_file2 if total_coordinates_file2 > 0 else 0
-duplicate_ratio_combined = duplicate_count / total_coordinates_combined if total_coordinates_combined > 0 else 0
+duplicate_ratio_file1 = (
+    duplicate_count / total_coordinates_file1 if total_coordinates_file1 > 0 else 0
+)
+duplicate_ratio_file2 = (
+    duplicate_count / total_coordinates_file2 if total_coordinates_file2 > 0 else 0
+)
+duplicate_ratio_combined = (
+    duplicate_count / total_coordinates_combined
+    if total_coordinates_combined > 0
+    else 0
+)
 
 # Print results
 print(f"Total coordinates in file 1: {total_coordinates_file1}")

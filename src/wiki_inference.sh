@@ -8,5 +8,6 @@ python ./src/data_inference.py \
 --num_batch 1 \
 --debug 100000 \
 --num_sample 10000 \
---result_file wiki.jsonl \
---dataset "wikitext,wikitext-2-raw-v1"
+--result_file wiki_o.jsonl \
+--dataset "wikitext,wikitext-2-raw-v1" \
+--retention_threshold 98
