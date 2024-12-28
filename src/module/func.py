@@ -37,6 +37,68 @@ def scaled_input(emb, batch_size, num_batch):
     return res, step[0]
 
 
+import matplotlib.pyplot as plt
+
+
+def scatter_plot(counter_obj):
+    x = [key[0] for key in counter_obj.keys()]
+    y = [key[1] for key in counter_obj.keys()]
+    sizes = [value * 10 for value in counter_obj.values()]  # 调整点大小以反映计数
+
+    plt.scatter(x, y, s=sizes, alpha=0.6, color="skyblue", edgecolor="black")
+    plt.xlabel("X values")
+    plt.ylabel("Y values")
+    plt.title("Scatter plot of (x, y) counts")
+    plt.show()
+
+
+def heatmap_plot(counter_obj):
+    max_x = max(key[0] for key in counter_obj.keys()) + 1
+    max_y = max(key[1] for key in counter_obj.keys()) + 1
+    heatmap = np.zeros((max_x, max_y))
+
+    for (x, y), count in counter_obj.items():
+        heatmap[x, y] = count
+
+    plt.imshow(heatmap, cmap="Blues", origin="lower")
+    plt.colorbar(label="Counts")
+    plt.xlabel("X values")
+    plt.ylabel("Y values")
+    plt.title("Heatmap of (x, y) counts")
+    plt.show()
+
+
+def plot_points(points, color="blue", marker="o", title="Scatter Plot of Points"):
+    """
+    绘制包含 (x, y) 对的集合。
+
+    参数:
+        points (set): 包含 (x, y) 对的集合。
+        color (str): 点的颜色 (默认为 'blue')。
+        marker (str): 点的标记样式 (默认为 'o')。
+        title (str): 图形标题 (默认为 'Scatter Plot of Points')。
+    """
+    if not points:
+        print("集合为空，无法绘制。")
+        return
+
+    # 分离集合中的 x 和 y 坐标
+    x_values, y_values = zip(*points)
+
+    # 绘制散点图
+    plt.scatter(x_values, y_values, color=color, marker=marker, label="Points")
+
+    # 添加图形元素
+    plt.title(title)
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+    plt.legend()
+    plt.grid(True)
+
+    # 显示图形
+    plt.show()
+
+
 def convert_to_triplet_ig_top(ig_list, RETENTION_THRESHOLD=99):
     # ig_list 12个transformer block，每个block 3072个ffn中间层激活权重
     # i：Transformer 层的索引（0 到 11，共 12 层）
