@@ -1,0 +1,187 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python 调试程序: 包含参数的当前文件",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "${command:pickArgs}"
+            ]
+        },
+        {
+            "name": "count duplicate",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/count_duplicate.py",
+            "console": "integratedTerminal",
+            "args": [
+                "${command:pickArgs}"
+            ]
+        },
+        {
+            "name": "Python 调试程序: 当前文件",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/1_analyze_mlm.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--bert_model",
+                "bert-base-cased",
+                "--data_path",
+                "../data/PARAREL/data_all.json",
+                "--tmp_data_path",
+                "../data/PARAREL/data_all_allbags.json",
+                "--output_dir",
+                "../results/",
+                "--output_prefix",
+                "TREx-all",
+                "--gpus",
+                "0",
+                "--max_seq_length",
+                "128",
+                "--get_ig_gold",
+                "--get_base",
+                "--batch_size",
+                "20",
+                "--num_batch",
+                "1",
+                "--pt_relation",
+                "P101",
+                // "--pt_relation", "${env:PT_RELATION}",
+                "--debug",
+                "100000"
+            ],
+            "env": {
+                "PT_RELATION": "P101"
+            }
+        },
+        {
+            "name": "2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--bert_model",
+                "bert-base-cased",
+                "--data_path",
+                "../data/PARAREL/data_all.json",
+                "--tmp_data_path",
+                "../data/PARAREL/data_all_allbags.json",
+                "--output_dir",
+                "../results/",
+                "--output_prefix",
+                "TREx-all",
+                "--gpus",
+                "0",
+                "--max_seq_length",
+                "128",
+                "--get_ig_gold",
+                "--get_base",
+                "--batch_size",
+                "20",
+                "--num_batch",
+                "1",
+                "--pt_relation",
+                "P101",
+                // "--pt_relation", "${env:PT_RELATION}",
+                "--debug",
+                "100000"
+            ],
+            "env": {
+                "PT_RELATION": "P101"
+            }
+        },
+        {
+            "name": "inference",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/inference.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--bert_model",
+                "bert-base-cased",
+                "--data_path",
+                "../data/PARAREL/data_all.json",
+                "--tmp_data_path",
+                "../data/PARAREL/data_all_allbags.json",
+                "--output_dir",
+                "../results/",
+                "--output_prefix",
+                "TREx-all",
+                "--gpus",
+                "0",
+                "--max_seq_length",
+                "128",
+                "--get_ig_gold",
+                "--get_base",
+                "--batch_size",
+                "20",
+                "--num_batch",
+                "1",
+                "--pt_relation",
+                "P101",
+                // "--pt_relation", "${env:PT_RELATION}",
+                "--debug",
+                "100000"
+            ],
+            "env": {
+                "PT_RELATION": "P101"
+            }
+        },
+        {
+            "name": "data_inference",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/data_inference.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--bert_model",
+                "bert-base-cased",
+                "--output_dir",
+                "../results/",
+                "--max_seq_length",
+                "128",
+                "--get_ig_gold",
+                "--batch_size",
+                "20",
+                "--num_batch",
+                "1",
+                "--debug",
+                "100000",
+                "--result_file",
+                "wiki.jsonl",
+                "--dataset",
+                "wikitext,wikitext-2-raw-v1"
+            ],
+        },
+        {
+            "name": "duplicate_between",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/duplicate_between.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--j1",
+                "/home/vscode/ftg/results/wiki.jsonl",
+                "--j2", 
+                "/home/vscode/ftg/results/imdb.jsonl"
+            ],
+        }
+    ]
+}
