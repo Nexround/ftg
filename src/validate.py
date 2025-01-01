@@ -111,17 +111,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # 1. 加载 Wikitext 数据集
     # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-    dataset = load_dataset(*args.dataset, trust_remote_code=True)
+    dataset = load_dataset(*args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets")
     dataset = dataset.map(lowercase_text, batched=True)
+    dataset = (dataset["train"].shuffle(seed=42).select(range(args.num_sample)))["text"]
 
     # 2. 加载 BERT tokenizer 和模型
     model_name = "bert-base-uncased"  # 你也可以选择其他的预训练 BERT 模型
-    model = BertForMaskedLM.from_pretrained(model_name)
+    model = BertForMaskedLM.from_pretrained(model_name, cache_dir="/cache/huggingface/transformers")
     tokenizer = BertTokenizer.from_pretrained(model_name)
 
-    sample_text = extract_random_samples(dataset, args.num_sample)
+    # sample_text = extract_random_samples(dataset, args.num_sample)
     masked_texts, masked_positions = mask_and_truncate_text(
-        sample_text, tokenizer, max_length=MAX_SEQ_LENGTH
+        dataset, tokenizer, max_length=MAX_SEQ_LENGTH
     )
 
     fill_mask = pipeline("fill-mask", model=model, tokenizer=tokenizer)
@@ -142,7 +143,7 @@ if __name__ == "__main__":
     # 计算每个掩蔽位置的准确性
     for idx, masked_sentence in enumerate(masked_texts):
         # 对原始文本进行分词
-        original_text = sample_text[idx]
+        original_text = dataset[idx]
         original_tokens = tokenizer.tokenize(original_text)
 
         # 获取掩蔽位置的原始 token
