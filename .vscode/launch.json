@@ -29,82 +29,6 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "1",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/1_analyze_mlm.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/src",
-            "args": [
-                "--bert_model",
-                "bert-base-cased",
-                "--data_path",
-                "../data/PARAREL/data_all.json",
-                "--tmp_data_path",
-                "../data/PARAREL/data_all_allbags.json",
-                "--output_dir",
-                "../results/",
-                "--output_prefix",
-                "TREx-all",
-                "--gpus",
-                "0",
-                "--max_seq_length",
-                "128",
-                "--get_ig_gold",
-                "--get_base",
-                "--batch_size",
-                "20",
-                "--num_batch",
-                "1",
-                "--pt_relation",
-                "P101",
-                // "--pt_relation", "${env:PT_RELATION}",
-                "--debug",
-                "100000"
-            ],
-            "env": {
-                "PT_RELATION": "P101"
-            }
-        },
-        {
-            "name": "2",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/main.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/src",
-            "args": [
-                "--bert_model",
-                "bert-base-cased",
-                "--data_path",
-                "../data/PARAREL/data_all.json",
-                "--tmp_data_path",
-                "../data/PARAREL/data_all_allbags.json",
-                "--output_dir",
-                "../results/",
-                "--output_prefix",
-                "TREx-all",
-                "--gpus",
-                "0",
-                "--max_seq_length",
-                "128",
-                "--get_ig_gold",
-                "--get_base",
-                "--batch_size",
-                "20",
-                "--num_batch",
-                "1",
-                "--pt_relation",
-                "P101",
-                // "--pt_relation", "${env:PT_RELATION}",
-                "--debug",
-                "100000"
-            ],
-            "env": {
-                "PT_RELATION": "P101"
-            }
-        },
-        {
             "name": "inference",
             "type": "debugpy",
             "request": "launch",
@@ -181,6 +105,24 @@
                 "/home/vscode/ftg/results/wiki.jsonl",
                 "--j2", 
                 "/home/vscode/ftg/results/imdb.jsonl"
+            ],
+        },
+        {
+            "name": "validate",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/validate.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--batch_size",
+                "64",
+                "--num_sample", 
+                "10000",
+                "--dataset",
+                // "iamtarun/python_code_instructions_18k_alpaca"
+                // "free-law/Caselaw_Access_Project"
+                "wikipedia,20220301.en"
             ],
         }
     ]

@@ -17,7 +17,7 @@ def mask_and_truncate_text(
     tokenizer: Any,
     max_length: int = 512,
     mask_token: str = "[MASK]",
-    stop_words: List[str] = None
+    stop_words: List[str] = None,
 ) -> Tuple[List[str], List[int]]:
     """
     对输入文本随机位置添加一个 [MASK] 标签，并根据分词器结果处理截断问题，同时优化 [MASK] 的放置位置。
@@ -30,13 +30,24 @@ def mask_and_truncate_text(
         stop_words (List[str]): 语义意义较弱的单词列表，默认值为常见英语停用词。
 
     Returns:
-        Tuple[List[str], List[int]]: 
+        Tuple[List[str], List[int]]:
             - 添加了一个 [MASK] 并截断后的文本列表。
             - 每个文本中被掩盖的单词索引位置列表。
     """
     if stop_words is None:
         # 常见的英语停用词，可根据需要扩展
-        stop_words = {"am", "is", "are", "do", "does", "was", "were", "be", "been", "being"}
+        stop_words = {
+            "am",
+            "is",
+            "are",
+            "do",
+            "does",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+        }
 
     masked_texts = []
     masked_positions = []
@@ -57,7 +68,8 @@ def mask_and_truncate_text(
 
         # 过滤标点符号和停用词的位置
         valid_positions = [
-            i for i, token in enumerate(truncated_tokens)
+            i
+            for i, token in enumerate(truncated_tokens)
             if not re.fullmatch(r"\W+", token) and token.lower() not in stop_words
         ]
 
@@ -83,10 +95,14 @@ def mask_and_truncate_text(
 
     return masked_texts, masked_positions
 
+
 # 定义一个函数，用于将文本转换为小写
 def lowercase_text(batch):
-    batch["text"] = [text.lower() for text in batch["text"]]  # 遍历列表并对每个元素调用 lower()
+    batch["text"] = [
+        text.lower() for text in batch["text"]
+    ]  # 遍历列表并对每个元素调用 lower()
     return batch
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -111,13 +127,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # 1. 加载 Wikitext 数据集
     # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-    dataset = load_dataset(*args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets")
-    dataset = dataset.map(lowercase_text, batched=True)
+    # dataset = load_dataset(
+    #     "codeparrot/github-code", streaming=True, split="train", cache_dir="/cache/huggingface/datasets"
+    # )
+    dataset = load_dataset(
+        *args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets"
+    )
+    # dataset = dataset.map(lowercase_text, batched=True)
+    # dataset = dataset["train"]
     dataset = (dataset["train"].shuffle(seed=42).select(range(args.num_sample)))["text"]
 
     # 2. 加载 BERT tokenizer 和模型
-    model_name = "bert-base-uncased"  # 你也可以选择其他的预训练 BERT 模型
-    model = BertForMaskedLM.from_pretrained(model_name, cache_dir="/cache/huggingface/transformers")
+    model_name = "bert-base-cased"  # 你也可以选择其他的预训练 BERT 模型
+    model = BertForMaskedLM.from_pretrained(
+        model_name, cache_dir="/cache/huggingface/hub"
+    )
     tokenizer = BertTokenizer.from_pretrained(model_name)
 
     # sample_text = extract_random_samples(dataset, args.num_sample)
@@ -129,7 +153,8 @@ if __name__ == "__main__":
 
     batch_size = args.batch_size  # 根据 GPU 内存调整批量大小
     batched_texts = [
-        masked_texts[i : i + batch_size] for i in range(0, len(masked_texts), batch_size)
+        masked_texts[i : i + batch_size]
+        for i in range(0, len(masked_texts), batch_size)
     ]
 
     predictions = []

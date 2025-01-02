@@ -18,7 +18,12 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import BertTokenizer
 from custom_bert import BertForMaskedLM
-from module.func import scaled_input, convert_to_triplet_ig_top, extract_random_samples, parse_comma_separated
+from module.func import (
+    scaled_input,
+    convert_to_triplet_ig_top,
+    extract_random_samples,
+    parse_comma_separated,
+)
 
 # set logger
 logging.basicConfig(
@@ -202,7 +207,9 @@ if __name__ == "__main__":
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
-    model = BertForMaskedLM.from_pretrained(args.bert_model)
+    model = BertForMaskedLM.from_pretrained(
+        args.bert_model, cache_dir="/cache/huggingface/hub"
+    )
     model.to(device)
 
     # data parallel
@@ -210,14 +217,17 @@ if __name__ == "__main__":
         model = torch.nn.DataParallel(model)
     model.eval()
 
-    dataset = load_dataset(*args.dataset)
+    dataset = load_dataset(
+        *args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets"
+    )
     # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
     # sample_text = [i for i in dataset["train"]["text"][10:15] if i.strip() != ""]
-    sample_text = extract_random_samples(dataset, args.num_sample)
+    # sample_text = extract_random_samples(dataset, args.num_sample)
+    dataset = (dataset["train"].shuffle(seed=42).select(range(args.num_sample)))["text"]
     # evaluate args.debug bags for each relation
 
     res_dict_bag = []
-    for text in tqdm(sample_text):
+    for text in tqdm(dataset):
         # record running time
         tic = time.perf_counter()
         try:
@@ -340,7 +350,9 @@ if __name__ == "__main__":
                 res_dict["base"].append(ffn_weights.squeeze().tolist())
 
         if args.get_ig_gold:
-            res_dict["ig_gold"] = convert_to_triplet_ig_top(res_dict["ig_gold"], args.retention_threshold)
+            res_dict["ig_gold"] = convert_to_triplet_ig_top(
+                res_dict["ig_gold"], args.retention_threshold
+            )
             # res_dict['ig_gold'] = convert_to_triplet_ig(res_dict['ig_gold'])
         # if args.get_base:
         #     res_dict["base"] = convert_to_triplet_ig(res_dict["base"])
@@ -350,7 +362,5 @@ if __name__ == "__main__":
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
 
-    with jsonlines.open(
-        os.path.join(args.output_dir, args.result_file), "w"
-    ) as fw:
+    with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:
         fw.write(res_dict_bag)
