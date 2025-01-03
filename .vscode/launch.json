@@ -102,9 +102,9 @@
             "cwd": "${workspaceFolder}/src",
             "args": [
                 "--j1",
-                "/home/vscode/ftg/results/wiki.jsonl",
+                "${workspaceFolder}/results/law_o.jsonl",
                 "--j2", 
-                "/home/vscode/ftg/results/imdb.jsonl"
+                "${workspaceFolder}/results/wiki_o.jsonl"
             ],
         },
         {
