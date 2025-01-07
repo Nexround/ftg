@@ -6,7 +6,7 @@ from shared import compute_metrics
 import time
 import os
 # 1. 加载数据集
-dataset = load_dataset("imdb", cache_dir="/cache/huggingface/datasets")
+dataset = load_dataset("fancyzhx/yelp_polarity", cache_dir="/cache/huggingface/datasets")
 
 # 2. 加载 BERT 分词器
 tokenizer = BertTokenizer.from_pretrained(
@@ -21,8 +21,8 @@ def tokenize_function(examples):
     )
 
 
-tokenized_train = dataset["train"].map(tokenize_function, batched=True)
-tokenized_test = dataset["test"].map(tokenize_function, batched=True)
+tokenized_train = dataset["train"].map(tokenize_function, batched=True, num_proc=16)
+tokenized_test = dataset["test"].map(tokenize_function, batched=True, num_proc=16)
 
 # 4. 设置 PyTorch Dataset
 tokenized_train.set_format(

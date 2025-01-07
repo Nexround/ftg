@@ -21,7 +21,7 @@ with open("/root/ftg/src/train/complement_1.json", "r", encoding="utf-8") as f:
 # 将数据转换为列表
 trainable_neurons = list(data)
 # 加载IMDB数据集
-dataset = load_dataset("fancyzhx/yelp_polarity", cache_dir="/cache/huggingface/datasets")
+dataset = load_dataset("Yelp/yelp_review_full", cache_dir="/cache/huggingface/datasets")
 tokenizer = BertTokenizer.from_pretrained(
     "bert-base-uncased", cache_dir="/cache/huggingface/hub"
 )
@@ -47,7 +47,7 @@ tokenized_test.set_format(
 
 # 加载模型
 model = BertForSequenceClassification.from_pretrained(
-    "bert-base-uncased", num_labels=2, cache_dir="/cache/huggingface/hub"
+    "bert-base-uncased", num_labels=10, cache_dir="/cache/huggingface/hub"
 )
 
 # 冻结所有参数
@@ -106,34 +106,6 @@ def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
         hooks.append(output_dense.bias.register_hook(output_bias_hook))
 
     return hooks  # 返回 hooks 以便后续管理和清理
-
-
-
-def unfreeze_ffn_connections(model, trainable_neurons):
-    for idx, (layer, neuron_index) in enumerate(trainable_neurons):
-        # 解冻输入权重
-        # input_weight = model.bert.encoder.layer[layer].intermediate.dense.weight
-
-        input_weight = model.bert.encoder.layer[layer].intermediate.dense.weight[
-            neuron_index, :
-        ]
-        # model.bert.encoder.layer[layer].intermediate.dense.weight[neuron_index, :].requires_grad_(True)
-        input_weight.requires_grad = True
-
-        # 解冻输出权重
-        output_weight = model.bert.encoder.layer[layer].output.dense.weight[
-            :, neuron_index
-        ]
-        output_weight.requires_grad = True
-        # print(input_weight.numel(), output_weight.numel())
-        # 解冻偏置项
-        input_bias = model.bert.encoder.layer[layer].intermediate.dense.bias[
-            neuron_index
-        ]
-        output_bias = model.bert.encoder.layer[layer].output.dense.bias
-        input_bias.requires_grad = True
-        output_bias.requires_grad = True
-
 
 hooks = unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons)
 model.classifier.weight.requires_grad = True

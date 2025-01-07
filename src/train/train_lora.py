@@ -8,20 +8,11 @@ from datasets import load_dataset
 from peft import LoraConfig, get_peft_model
 import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from shared import training_args, compute_metrics  # 加载IMDB数据集
+import time
+import os
 
-# 加载IMDB数据集
 dataset = load_dataset("imdb", cache_dir="/cache/huggingface/datasets")
-
-
-def compute_metrics(pred):
-    labels = pred.label_ids
-    preds = pred.predictions.argmax(-1)
-    acc = accuracy_score(labels, preds)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        labels, preds, average="binary"
-    )
-    return {"accuracy": acc, "precision": precision, "recall": recall, "f1": f1}
-
 
 # 加载BERT分词器和模型
 tokenizer = BertTokenizer.from_pretrained(
@@ -30,7 +21,6 @@ tokenizer = BertTokenizer.from_pretrained(
 model = BertForSequenceClassification.from_pretrained(
     "bert-base-uncased", num_labels=2, cache_dir="/cache/huggingface/hub"
 )
-
 
 
 def tokenize_function(examples):
@@ -57,21 +47,25 @@ lora_config = LoraConfig(
 # 使用LoRA调整模型
 model = get_peft_model(model, lora_config)
 
-# 训练参数
+trainable_param_count = sum(
+    param.numel() for param in model.parameters() if param.requires_grad
+)
+print(f"Total Trainable Parameters: {trainable_param_count}")
+print(model)
+log_dir = f"logs/run_{time.strftime('%Y%m%d-%H%M%S')}_{os.path.basename(__file__)}"
 training_args = TrainingArguments(
     output_dir="./results",  # 保存模型的路径
-    evaluation_strategy="epoch",  # 每个 epoch 进行一次评估
+    eval_strategy="epoch",  # 每个 epoch 进行一次评估
     learning_rate=5e-5,  # 学习率
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
     num_train_epochs=3,  # 训练 epoch 数
     weight_decay=0.01,  # 权重衰减
-    logging_dir="./logs",  # 日志路径
+    logging_dir=log_dir,  # 日志路径
     logging_steps=500,
     save_steps=1000,
     save_total_limit=2,  # 最多保存两个模型
 )
-
 # 定义Trainer
 trainer = Trainer(
     model=model,

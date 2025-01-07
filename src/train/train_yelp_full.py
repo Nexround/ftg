@@ -6,11 +6,15 @@ from shared import compute_metrics
 import time
 import os
 # 1. 加载数据集
-dataset = load_dataset("imdb", cache_dir="/cache/huggingface/datasets")
+# train_dataset = load_dataset("Yelp/yelp_review_full", cache_dir="/cache/huggingface/datasets", split="train[:100%]")
+# test_dataset = load_dataset("Yelp/yelp_review_full", cache_dir="/cache/huggingface/datasets", split="test[:100%]")
+train_dataset = load_dataset("imdb", cache_dir="/cache/huggingface/datasets", split="train[:100%]")
+test_dataset = load_dataset("imdb", cache_dir="/cache/huggingface/datasets", split="test[:100%]")
+# dataset = load_dataset("imdb", cache_dir="/cache/huggingface/datasets")
 
 # 2. 加载 BERT 分词器
 tokenizer = BertTokenizer.from_pretrained(
-    "bert-base-uncased", cache_dir="/cache/huggingface/hub"
+    "bert-large-uncased", cache_dir="/cache/huggingface/hub"
 )
 print(f"Current file name: {os.path.basename(__file__)}")
 
@@ -21,9 +25,9 @@ def tokenize_function(examples):
     )
 
 
-tokenized_train = dataset["train"].map(tokenize_function, batched=True)
-tokenized_test = dataset["test"].map(tokenize_function, batched=True)
-
+tokenized_train = train_dataset.map(tokenize_function, batched=True, num_proc=16)
+tokenized_test = test_dataset.map(tokenize_function, batched=True, num_proc=16)
+# 109486085
 # 4. 设置 PyTorch Dataset
 tokenized_train.set_format(
     type="torch", columns=["input_ids", "attention_mask", "label"]
@@ -34,7 +38,7 @@ tokenized_test.set_format(
 
 # 5. 加载预训练的 BERT 模型
 model = BertForSequenceClassification.from_pretrained(
-    "bert-base-uncased", cache_dir="/cache/huggingface/hub", num_labels=2
+    "bert-large-uncased", cache_dir="/cache/huggingface/hub", num_labels=2
 )
 trainable_param_count = sum(
     param.numel() for param in model.parameters() if param.requires_grad
@@ -44,7 +48,7 @@ print(model)
 log_dir = f"logs/run_{time.strftime('%Y%m%d-%H%M%S')}_{os.path.basename(__file__)}"
 training_args = TrainingArguments(
     output_dir="./results",  # 保存模型的路径
-    evaluation_strategy="epoch",  # 每个 epoch 进行一次评估
+    eval_strategy="epoch",  # 每个 epoch 进行一次评估
     learning_rate=5e-5,  # 学习率
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
@@ -54,6 +58,8 @@ training_args = TrainingArguments(
     logging_steps=500,
     save_steps=1000,
     save_total_limit=2,  # 最多保存两个模型
+    dataloader_num_workers=16,
+    fp16=True,
 )
 # 8. 定义 Trainer
 trainer = Trainer(
@@ -61,7 +67,7 @@ trainer = Trainer(
     args=training_args,
     train_dataset=tokenized_train,
     eval_dataset=tokenized_test,
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
     compute_metrics=compute_metrics,
 )
 
