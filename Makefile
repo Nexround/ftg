@@ -53,3 +53,24 @@ imdb:
 	--num_sample 10000 \
 	--result_file imdb.json \
 	--dataset imdb
+
+train_full:
+	python train.py \
+	--dataset "imdb" \
+	--model "bert-base-uncased" \
+	--output_dir "/root/ftg/results/" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 2 \
+	--full
+	
+train_target:
+	python train.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/src/train/target_neurons/complement_1.json" \
+	--model "bert-base-uncased" \
+	--output_dir "/root/ftg/results/" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 2 \
+	--train_target_neurons \

@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import random
+from collections import defaultdict
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 
 def scaled_input(emb, batch_size, num_batch):
@@ -181,3 +183,85 @@ def remove_empty_dimensions(lst):
         while len(lst) == 1 and isinstance(lst[0], list) and lst[0] == []:
             lst = lst[0]
     return lst
+
+
+def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
+    hooks = []
+
+    # 按层分组 trainable_neurons，减少 hook 数量
+
+    layer_to_neurons = defaultdict(list)
+    for layer, neuron_index in trainable_neurons:
+        layer_to_neurons[layer].append(neuron_index)
+
+    for layer, neuron_indices in layer_to_neurons.items():
+        # 获取当前层的中间层和输出层
+        intermediate_dense = model.bert.encoder.layer[layer].intermediate.dense
+        output_dense = model.bert.encoder.layer[layer].output.dense
+
+        # 确保权重和偏置的 requires_grad 为 True
+        intermediate_dense.weight.requires_grad = True
+        intermediate_dense.bias.requires_grad = True
+        output_dense.weight.requires_grad = True
+        output_dense.bias.requires_grad = True
+
+        # 注册单个钩子函数，针对输入权重的所有指定神经元
+        def input_weight_hook(grad):
+            mask = torch.zeros_like(grad)
+            mask[neuron_indices, :] = 1  # 只允许指定神经元的梯度
+            return grad * mask
+
+        hooks.append(intermediate_dense.weight.register_hook(input_weight_hook))
+
+        # 注册单个钩子函数，针对输出权重的所有指定神经元
+        def output_weight_hook(grad):
+            mask = torch.zeros_like(grad)
+            mask[:, neuron_indices] = 1  # 只允许指定神经元的梯度
+            return grad * mask
+
+        hooks.append(output_dense.weight.register_hook(output_weight_hook))
+
+        # 注册单个钩子函数，针对输入偏置的所有指定神经元
+        def input_bias_hook(grad):
+            mask = torch.zeros_like(grad)
+            mask[neuron_indices] = 1  # 只允许指定神经元的梯度
+            return grad * mask
+
+        hooks.append(intermediate_dense.bias.register_hook(input_bias_hook))
+
+        # 输出层偏置不需要区分神经元，保持全梯度
+        def output_bias_hook(grad):
+            return grad  # 不修改偏置梯度
+
+        hooks.append(output_dense.bias.register_hook(output_bias_hook))
+
+    return hooks  # 返回 hooks 以便后续管理和清理
+
+
+def compute_metrics(pred, method="weighted"):
+    """
+    计算模型的评价指标，包括准确率、精确率、召回率和F1分数。
+
+    Args:
+        pred: 一个包含两个字段的对象，分别是`predictions`和`label_ids`。
+              `predictions`是模型的预测结果，`label_ids`是真实标签。
+
+    Returns:
+        Dict[str, float]: 各种评价指标的字典。
+    """
+    # 获取预测结果和真实标签
+    predictions = pred.predictions.argmax(axis=-1)  # 对每个样本选择概率最高的类别
+    label_ids = pred.label_ids
+
+    # 计算评价指标
+    accuracy = accuracy_score(label_ids, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        label_ids, predictions, average=method  # 加权平均，适合多分类
+    )
+
+    return {
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+    }
