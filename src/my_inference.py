@@ -9,6 +9,7 @@ import time
 import argparse
 import logging
 import os
+import copy
 
 import jsonlines
 import torch
@@ -24,7 +25,8 @@ from module.func import (
     extract_random_samples,
     parse_comma_separated,
 )
-
+from model import CustomBertForMaskedLM
+from pprint import pprint
 # set logger
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -207,7 +209,7 @@ if __name__ == "__main__":
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
-    model = BertForMaskedLM.from_pretrained(
+    model = CustomBertForMaskedLM.from_pretrained(
         args.bert_model, cache_dir="/cache/huggingface/hub"
     )
     model.to(device)
@@ -262,93 +264,20 @@ if __name__ == "__main__":
         res_dict = {"pred": [], "ig_pred": [], "ig_gold": [], "base": []}
 
         # original pred prob
-        if args.get_pred:
-            _, logits = model(
-                input_ids=input_ids,
-                attention_mask=input_mask,
-                token_type_ids=segment_ids,
-                tgt_pos=tgt_pos,
-                tgt_layer=0,
-            )  # (1, n_vocab)
-            base_pred_prob = F.softmax(logits, dim=1)  # (1, n_vocab)
-            res_dict["pred"].append(base_pred_prob.tolist())
-        # logit_0 = None
-        for tgt_layer in range(model.bert.config.num_hidden_layers):
-            # logits 是结果，ffn_weights 是中间层激活值
-            ffn_weights, logits = model(
-                input_ids=input_ids,
-                attention_mask=input_mask,
-                token_type_ids=segment_ids,
-                tgt_pos=tgt_pos,
-                tgt_layer=tgt_layer,
-            )  # (1, ffn_size), (1, n_vocab)
-            # if logit_0 != None:
-            #     assert torch.allclose(logits, logit_0), "logits are not equal"
-            # logit_0 = logits
-            pred_label = int(torch.argmax(logits[0, :]))  # scalar
-            gold_label = tokenizer.convert_tokens_to_ids(tokens_info["gold_obj"])
-            tokens_info["pred_obj"] = tokenizer.convert_ids_to_tokens(pred_label)
-            scaled_weights, weights_step = scaled_input(
-                ffn_weights, args.batch_size, args.num_batch
-            )  # (num_points, ffn_size), (ffn_size)
-            scaled_weights.requires_grad_(True)
-            # 先拿到每个神经元的激活值，然后再计算IG
-            # 分层计算IG
-            # integrated grad at the pred label for each layer
-            if args.get_ig_pred:
-                ig_pred = None
-                # 计算IG
-                for batch_idx in range(args.num_batch):
-                    batch_weights = scaled_weights[
-                        batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size
-                    ]
-                    _, grad = model(
-                        input_ids=input_ids,
-                        attention_mask=input_mask,
-                        token_type_ids=segment_ids,
-                        tgt_pos=tgt_pos,
-                        tgt_layer=tgt_layer,
-                        tmp_score=batch_weights,
-                        tgt_label=pred_label,
-                    )  # (batch, n_vocab), (batch, ffn_size)
-                    grad = grad.sum(dim=0)  # (ffn_size)
-                    ig_pred = (
-                        grad if ig_pred is None else torch.add(ig_pred, grad)
-                    )  # (ffn_size)
-                ig_pred = ig_pred * weights_step  # (ffn_size)
-                res_dict["ig_pred"].append(ig_pred.tolist())
-
-            # integrated grad at the gold label for each layer
-            if args.get_ig_gold:
-                ig_gold = None
-                for batch_idx in range(args.num_batch):
-                    # batch_weights = scaled_weights[
-                    #     batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size
-                    # ]
-                    batch_weights = scaled_weights
-                    # 通过修改特定位置的神经元权重（或特征值），观察其对模型输出的影响
-                    # grad [20, 3072]
-                    _, grad = model(
-                        input_ids=input_ids,
-                        attention_mask=input_mask,
-                        token_type_ids=segment_ids,
-                        tgt_pos=tgt_pos,
-                        tgt_layer=tgt_layer,
-                        tmp_score=batch_weights,
-                        tgt_label=gold_label,
-                    )  # (batch, n_vocab), (batch, ffn_size)
-                    grad_summed = grad.sum(dim=0)  # (ffn_size)
-                    ig_gold = (
-                        grad_summed
-                        if ig_gold is None
-                        else torch.add(ig_gold, grad_summed)
-                    )  # (ffn_size)
-                ig_gold = ig_gold * weights_step  # (ffn_size)
-                res_dict["ig_gold"].append(ig_gold.tolist())
-
-            # base ffn_weights for each layer
-            if args.get_base:
-                res_dict["base"].append(ffn_weights.squeeze().tolist())
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=input_mask,
+            token_type_ids=segment_ids,
+        )
+        logits = outputs.logits
+        pred_label = int(torch.argmax(logits[0, tgt_pos, :]))  # scalar
+        model.forward_with_partitioning(target_position=tgt_pos)
+        gold_label = tokenizer.convert_tokens_to_ids(tokens_info["gold_obj"])
+        tokens_info["pred_obj"] = tokenizer.convert_ids_to_tokens(pred_label)
+        ig_gold = model.calulate_integrated_gradients(target_label=gold_label)
+        for ig in ig_gold:
+            ig = ig.cpu().detach()
+            res_dict["ig_gold"].append(ig)
 
         if args.get_ig_gold:
             res_dict["ig_gold"] = convert_to_triplet_ig_top(
@@ -362,6 +291,8 @@ if __name__ == "__main__":
         # record running time
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
+        pprint(torch.cuda.memory_stats())
+        model.clean()
 
     with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:
         fw.write(res_dict_bag)

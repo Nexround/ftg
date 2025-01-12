@@ -114,7 +114,7 @@ def convert_to_triplet_ig_top(ig_list, RETENTION_THRESHOLD=99):
     for i in range(ig.shape[0]):
         for j in range(ig.shape[1]):
             if ig[i][j] >= threshold:
-                ig_triplet.append([i, j, ig[i][j]])
+                ig_triplet.append([i, j, float(ig[i][j])])
 
     return ig_triplet
 

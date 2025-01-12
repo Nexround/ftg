@@ -737,12 +737,20 @@ class BertForMaskedLM(PreTrainedBertModel):
                 imp_pos=imp_pos,
                 imp_op=imp_op,
             )  # (batch, max_len, hidden_size), (batch, max_len, ffn_size)
-        # tgt_pos 指定token位置
+        # tgt_pos 指定token位置 这个切片操作意在加速处理
         last_hidden = last_hidden[:, tgt_pos, :]  # (batch, hidden_size) ([20, 768]) 最后一个模块的输出
         ffn_weights = ffn_weights[:, tgt_pos, :]  # (batch, ffn_size)
         tgt_logits = self.cls(last_hidden)  # (batch, n_vocab) 交给分类器后的输出
-        tgt_prob = F.softmax(tgt_logits, dim=1)  # (batch, n_vocab) ([20, 28996])
-
+        tgt_prob = F.softmax(tgt_logits, dim=1)  # (batch, n_vocab) ([20, 28996]) 最终的概率分布
+        """(cls): BertOnlyMLMHead(
+            (predictions): BertLMPredictionHead(
+            (transform): BertPredictionHeadTransform(
+                (dense): Linear(in_features=768, out_features=768, bias=True)
+                (LayerNorm): BertLayerNorm()
+            )
+            (decoder): Linear(in_features=768, out_features=28996, bias=False)
+            )
+        )"""
         if imp_op == "return":
             return imp_weights
         else:
@@ -751,7 +759,12 @@ class BertForMaskedLM(PreTrainedBertModel):
                 return ffn_weights, tgt_logits
             else:
                 # return final probabilities and grad at a layer at the [MASK] position
+                # tgt_label 预测标签的idx
+                # 拿到间隔化后的预测值 比如20个
+                # 这个计算是逐层进行的
+                o = torch.unbind(tgt_prob[:, tgt_label])
                 gradient = torch.autograd.grad(
-                    torch.unbind(tgt_prob[:, tgt_label]), tmp_score
+                    o, tmp_score
                 )
                 return tgt_prob, gradient[0]
+# 注意区别tgt_pos 和tgt_label

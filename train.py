@@ -1,26 +1,26 @@
 import time
-import os
 import argparse
 import json
 from functools import partial
 from transformers import (
-    BertTokenizer,
-    BertForSequenceClassification,
     Trainer,
     TrainingArguments,
+    AutoTokenizer,
+    AutoModelForSequenceClassification
 )
 from datasets import load_dataset
 
 from src.module.func import (
     unfreeze_ffn_connections_with_hooks_optimized,
     compute_metrics,
+    parse_comma_separated
 )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset", default=None, type=str, required=True)
+    parser.add_argument("--dataset", default=None, type=parse_comma_separated, required=True)
     parser.add_argument("--target_neurons_path", default=None, type=str)
 
     parser.add_argument(
@@ -43,6 +43,7 @@ if __name__ == "__main__":
         help="The output prefix to indentify each running of experiment. ",
     )
 
+    parser.add_argument("--learning_rate", default=5e-5, type=float)
     parser.add_argument("--batch_size", default=16, type=int)
     parser.add_argument("--num_labels", default=2, type=int)
     parser.add_argument(
@@ -53,19 +54,19 @@ if __name__ == "__main__":
     parser.add_argument("--full", default=False, action="store_true")
     args = parser.parse_args()
 
-    dataset = load_dataset(args.dataset, cache_dir="/cache/huggingface/datasets")
-    tokenizer = BertTokenizer.from_pretrained(
+    dataset = load_dataset(*args.dataset, cache_dir="/cache/huggingface/datasets")
+    tokenizer = AutoTokenizer.from_pretrained(
         args.model, cache_dir="/cache/huggingface/hub"
     )
     # 加载模型
-    model = BertForSequenceClassification.from_pretrained(
+    model = AutoModelForSequenceClassification.from_pretrained(
         args.model, num_labels=args.num_labels, cache_dir="/cache/huggingface/hub"
     )
 
     # 数据预处理
     def tokenize_function(examples):
         return tokenizer(
-            examples["text"], padding="max_length", truncation=True, max_length=512
+            examples["sentence"], padding="max_length", truncation=True, max_length=512
         )
 
     tokenized_train = dataset["train"].map(tokenize_function, batched=True, num_proc=32)
@@ -107,23 +108,36 @@ if __name__ == "__main__":
     )
     print(f"Total Trainable Parameters: {trainable_param_count}")
     print(model)
-    log_dir = f"logs/run_{time.strftime('%Y%m%d-%H%M%S')}_{os.path.basename(__file__)}"
+    log_dir = f"logs/run_{time.strftime('%Y_%m_%d_%H:%M:%S')}_{args.dataset}"
     training_args = TrainingArguments(
-        output_dir=args.output_dir,  # 保存模型的路径
+        output_dir=f"{args.output_dir}/run_{time.strftime('%Y_%m_%d_%H:%M:%S')}_{args.dataset}",  # 保存模型的路径
         eval_strategy="epoch",  # 每个 epoch 进行一次评估
-        learning_rate=5e-5 if args.full else 5e-4,  # 学习率
+        learning_rate=args.learning_rate,  # 学习率
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         num_train_epochs=3,  # 训练 epoch 数
-        weight_decay=0.01,  # 权重衰减
+        # weight_decay=0.01,  # 权重衰减
         logging_dir=log_dir,  # 日志路径
         logging_steps=500,
         save_steps=1000,
         save_total_limit=2,  # 最多保存两个模型
         save_strategy="epoch",
+        fp16=True
     )
-
-    trainer = Trainer(
+    class CustomTrainer(Trainer):
+        def training_step(self, model, inputs, return_outputs=False):
+            # 获取目标标签
+            labels = inputs.get("labels")
+            
+            # 检查目标标签的范围
+            n_classes = model.config.num_labels
+            if labels.min() < 0 or labels.max() >= n_classes:
+                raise ValueError(f"Target labels out of range! Expected between 0 and {n_classes - 1}, but got min={labels.min()}, max={labels.max()}.")
+            
+            # 调用父类的 training_step 来继续训练过程
+            return super().training_step(model, inputs, return_outputs)
+    
+    trainer = CustomTrainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_train,
