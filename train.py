@@ -71,9 +71,9 @@ if __name__ == "__main__":
     # 数据预处理
     def tokenize_function(examples):
         return tokenizer(
-            examples["review_text"], padding="max_length", truncation=True, max_length=512
+            examples["text"], padding="max_length", truncation=True, max_length=512
         )
-    dataset = dataset.rename_column("class_index", "label")
+    # dataset = dataset.rename_column("class_index", "label")
 
     tokenized_train = dataset["train"].map(tokenize_function, batched=True, num_proc=32)
     tokenized_test = dataset["test"].map(tokenize_function, batched=True, num_proc=32)

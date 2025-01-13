@@ -54,6 +54,17 @@ imdb:
 	--result_file imdb.json \
 	--dataset imdb
 
+token_cls_imdb:
+	python ./src/token_cls.py \
+	--bert_model /openbayes/home/ftg/results/train_full_imdb \
+	--output_dir ./results \
+	--max_seq_length 256 \
+	--batch_size 20 \
+	--result_file token_cls_imdb.json \
+	--dataset imdb \
+	--num_sample 10000 \
+	--retention_threshold 99 
+
 train_full_yelp:
 	python train.py \
 	--dataset "Yelp/yelp_review_full" \
@@ -87,10 +98,10 @@ train_full_amazon:
 	--learning_rate 5e-5 \
 	--full 
 
-train_full:
+train_full_imdb:
 	python train.py \
 	--dataset "imdb" \
-	--model "bert-base-uncased" \
+	--model "bert-base-cased" \
 	--output_dir "/root/ftg/results" \
 	--output_prefix "experiment_name" \
 	--batch_size 16 \

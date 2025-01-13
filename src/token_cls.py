@@ -57,71 +57,26 @@ if __name__ == "__main__":
         "Sequences longer than this will be truncated, and sequences shorter \n"
         "than this will be padded.",
     )
-    parser.add_argument(
-        "--do_lower_case",
-        default=False,
-        action="store_true",
-        help="Set this flag if you are using an uncased model",
-    )
-    parser.add_argument(
-        "--no_cuda",
-        default=False,
-        action="store_true",
-        help="Whether not to use CUDA when available",
-    )
+
     parser.add_argument("--gpus", type=str, default="0", help="available gpus id")
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed for initialization"
     )
-    parser.add_argument(
-        "--debug",
-        type=int,
-        default=-1,
-        help="How many examples to debug. -1 denotes no debugging",
-    )
 
-    # parameters about integrated grad
-    parser.add_argument(
-        "--get_pred", action="store_true", help="Whether to get prediction results."
-    )
-    parser.add_argument(
-        "--get_ig_pred",
-        action="store_true",
-        help="Whether to get integrated gradient at the predicted label.",
-    )
-    parser.add_argument(
-        "--get_ig_gold",
-        action="store_true",
-        help="Whether to get integrated gradient at the gold label.",
-    )
-    parser.add_argument(
-        "--get_base", action="store_true", help="Whether to get base values. "
-    )
     parser.add_argument(
         "--batch_size", default=16, type=int, help="Total batch size for cut."
     )
-    parser.add_argument(
-        "--num_batch", default=10, type=int, help="Num batch of an example."
-    )
-    parser.add_argument(
-        "--num_sample", default=10, type=int, help="Num batch of an example."
-    )
-    parser.add_argument(
-        "--retention_threshold", default=99, type=int, help="Num batch of an example."
-    )
+    parser.add_argument("--num_sample", default=10000, type=int)
+
+    parser.add_argument("--retention_threshold", default=99, type=int)
     parser.add_argument("--result_file", type=str)
     parser.add_argument("--dataset", type=parse_comma_separated)
 
     # parse arguments
     args = parser.parse_args()
 
-    # set device
-    if args.no_cuda or not torch.cuda.is_available():
-        device = torch.device("cpu")
-        n_gpu = 0
-    else:
-        device = torch.device("cuda:%s" % args.gpus)
-        n_gpu = 1
+    device = torch.device("cuda:0")
+    n_gpu = 1
 
     print(
         "device: {} n_gpu: {}, distributed training: {}".format(
@@ -139,10 +94,8 @@ if __name__ == "__main__":
     # save args
     os.makedirs(args.output_dir, exist_ok=True)
     # init tokenizer
-    tokenizer = BertTokenizer.from_pretrained(
-        args.bert_model, do_lower_case=args.do_lower_case
-    )
-
+    tokenizer = BertTokenizer.from_pretrained(args.bert_model)
+    # , do_lower_case=args.do_lower_case
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
@@ -165,22 +118,22 @@ if __name__ == "__main__":
             examples["text"],
             padding="max_length",
             truncation=True,
-            max_length=512,
+            max_length=args.max_seq_length,
         )
 
     dataset = dataset["train"].shuffle(seed=42).select(range(args.num_sample))
     tokenized_train = dataset.map(tokenize_function, batched=True, num_proc=32)
     # evaluate args.debug bags for each relation
 
-    res_dict_bag = []
+    record_list = []
 
     for item in tqdm(tokenized_train):
         # record running time
         tic = time.perf_counter()
-
-        cls_id = tokenizer.convert_tokens_to_ids('[CLS]')
+        gold_class = item["label"]
+        cls_id = tokenizer.convert_tokens_to_ids("[CLS]")
         # record various results
-        res_dict = {"pred": [], "ig_pred": [], "ig_gold": [], "base": []}
+        ig_dict = {"ig_gold": []}
 
         # Move input tensors to the same device as the model
         input_ids = torch.tensor(item["input_ids"]).unsqueeze(0).to(device)
@@ -196,28 +149,29 @@ if __name__ == "__main__":
         )
         logits = outputs.logits
         predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
-
+        if gold_class != predicted_class:
+            model.clean()
+            continue
+        """
+        若预测类别与真实类别不一致，则跳过
+        只处理[cls]位置上的ig
+        
+        """
         # predicted_class = torch.argmax(logits, dim=-1).item()
-        print(f"Predicted class: {predicted_class}")
-        label_map = model.config.id2label
-        print(f"Predicted label: {label_map[predicted_class]}")
+        # print(f"Predicted class: {predicted_class}")
+        # label_map = model.config.id2label
+        # print(f"Predicted label: {label_map[predicted_class]}")
         model.forward_with_partitioning(target_position=cls_pos)
-        gold_label = tokenizer.convert_tokens_to_ids(tokens_info["gold_obj"])
-        tokens_info["pred_obj"] = tokenizer.convert_ids_to_tokens(pred_label)
-        ig_gold = model.calulate_integrated_gradients(target_label=gold_label)
+        ig_gold = model.calulate_integrated_gradients(target_label=gold_class)
         for ig in ig_gold:
+            # 为batch inference预留的for
             ig = ig.cpu().detach()
-            res_dict["ig_gold"].append(ig)
+            ig_dict["ig_gold"].append(ig)
 
-        if args.get_ig_gold:
-            res_dict["ig_gold"] = convert_to_triplet_ig_top(
-                res_dict["ig_gold"], args.retention_threshold
-            )
-            # res_dict['ig_gold'] = convert_to_triplet_ig(res_dict['ig_gold'])
-        # if args.get_base:
-        #     res_dict["base"] = convert_to_triplet_ig(res_dict["base"])
-        # res_dict_bag.append([tokens_info, res_dict])
-        res_dict_bag.append([res_dict])
+        ig_dict["ig_gold"] = convert_to_triplet_ig_top(
+            ig_dict["ig_gold"], args.retention_threshold
+        )
+        record_list.append([ig_dict])
         # record running time
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
@@ -225,4 +179,4 @@ if __name__ == "__main__":
         model.clean()
 
     with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:
-        fw.write(res_dict_bag)
+        fw.write(record_list)
