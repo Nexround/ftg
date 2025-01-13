@@ -146,6 +146,7 @@ if __name__ == "__main__":
         outputs = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
+            target_token_idx=cls_pos,
         )
         logits = outputs.logits
         predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别

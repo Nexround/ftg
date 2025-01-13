@@ -316,7 +316,7 @@ class CustomBertForSequenceClassification(BertForSequenceClassification):
             output_dense.weight.requires_grad = True
             # output_dense.bias.requires_grad = True
 
-    def forward(self, *args, **kwargs):
+    def forward(self, target_token_idx, *args, **kwargs):
         """
         保存现有参数以用于forward_with_partitioning
         """
@@ -330,7 +330,9 @@ class CustomBertForSequenceClassification(BertForSequenceClassification):
                 self._intermediate_activations.clear()
 
             # 添加新的激活到 _intermediate_activations
-            self._intermediate_activations.append(output)
+            self._intermediate_activations.append(
+                output[:, target_token_idx, :]
+            )  # torch.Size([1, token_len, 3072])
 
         # Register hooks on intermediate layers
         hooks = []
@@ -357,8 +359,7 @@ class CustomBertForSequenceClassification(BertForSequenceClassification):
         找到对应token在每层的激活值，然后
         对每层的激活值进行间隔操作，并逐层记录
         """
-        for layer in self._intermediate_activations:
-            target_vector = layer[:, target_position, :]
+        for target_vector in self._intermediate_activations:
             partitioning, step = self.generate_partitioning(target_vector)
             self._partitioning_activations.append(partitioning)
             self._partitioning_step.append(step.detach())
