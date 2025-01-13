@@ -1,7 +1,6 @@
 {
     "version": "0.2.0",
     "configurations": [
-
         {
             "name": "Python 调试程序: 包含参数的当前文件",
             "type": "debugpy",
@@ -13,6 +12,13 @@
             ]
         },
         {
+            "name": "Python 调试程序: 当前文件",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "count duplicate",
             "type": "debugpy",
             "request": "launch",
@@ -21,13 +27,6 @@
             "args": [
                 "${command:pickArgs}"
             ]
-        },
-        {
-            "name": "Python 调试程序: 当前文件",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
         },
         {
             "name": "inference",
@@ -122,6 +121,60 @@
             ],
         },
         {
+            "name": "my_inference",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/my_inference.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--bert_model",
+                "bert-base-cased",
+                "--output_dir",
+                "../results/",
+                "--max_seq_length",
+                "128",
+                "--get_ig_gold",
+                "--batch_size",
+                "20",
+                "--num_batch",
+                "1",
+                "--debug",
+                "100000",
+                "--result_file",
+                "wiki.jsonl",
+                "--dataset",
+                "wikitext,wikitext-2-raw-v1"
+            ],
+        },
+        {
+            "name": "token_cls",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/token_cls.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "--bert_model",
+                "bert-base-cased",
+                "--output_dir",
+                "../results/",
+                "--max_seq_length",
+                "512",
+                "--get_ig_gold",
+                "--batch_size",
+                "20",
+                "--num_batch",
+                "1",
+                "--debug",
+                "100000",
+                "--result_file",
+                "imdb_token_cls.jsonl",
+                "--dataset",
+                "imdb"
+            ],
+        },
+        {
             "name": "duplicate_between",
             "type": "debugpy",
             "request": "launch",
@@ -131,7 +184,7 @@
             "args": [
                 "--j1",
                 "${workspaceFolder}/results/law_o.jsonl",
-                "--j2", 
+                "--j2",
                 "${workspaceFolder}/results/wiki_o.jsonl"
             ],
         },
@@ -145,7 +198,7 @@
             "args": [
                 "--batch_size",
                 "64",
-                "--num_sample", 
+                "--num_sample",
                 "10000",
                 "--dataset",
                 // "iamtarun/python_code_instructions_18k_alpaca"
@@ -161,15 +214,46 @@
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/src",
             "args": [
-                "--dataset", "nyu-mll/glue,sst2",
-                "--target_neurons_path", "/root/ftg/src/train/target_neurons/complement_1.json",
-                "--model", "bert-base-uncased",
-                "--output_dir", "/root/ftg/results",
-                "--output_prefix", "experiment_name",
-                "--batch_size", "16",
-                "--num_labels", "2",
+                "--dataset",
+                "nyu-mll/glue,sst2",
+                "--target_neurons_path",
+                "/root/ftg/src/train/target_neurons/complement_1.json",
+                "--model",
+                "bert-base-uncased",
+                "--output_dir",
+                "/root/ftg/results",
+                "--output_prefix",
+                "experiment_name",
+                "--batch_size",
+                "16",
+                "--num_labels",
+                "2",
                 "--train_target_neurons"
             ],
         }
-    ]
+    },
+    {
+        "name": "train_full_amazon",
+        "type": "debugpy",
+        "request": "launch",
+        "program": "${workspaceFolder}/train.py",
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}/src",
+        "args": [
+            "--dataset",
+            "yassiracharki/Amazon_Reviews_for_Sentiment_Analysis_fine_grained_5_classes",
+            "--model",
+            "distilbert/distilbert-base-uncased",
+            "--output_dir",
+            "/root/ftg/results",
+            "--output_prefix",
+            "experiment_name",
+            "--batch_size",
+            "16",
+            "--num_labels",
+            "5",
+            "--full"
+        ],
+    }
+]
 }

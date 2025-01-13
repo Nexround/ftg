@@ -57,12 +57,34 @@ imdb:
 train_full_yelp:
 	python train.py \
 	--dataset "Yelp/yelp_review_full" \
-	--model "/root/ftg/results/run_2025/01/07_09:27:26_Yelp/yelp_review_full/checkpoint-60939" \
+	--model "distilbert/distilbert-base-uncased" \
 	--output_dir "/root/ftg/results" \
 	--output_prefix "experiment_name" \
 	--batch_size 32 \
 	--num_labels 5 \
-	--learning_rate 2e-5 \
+	--learning_rate 5e-5 \
+	--full 
+
+train_full_ag_news:
+	python train.py \
+	--dataset "fancyzhx/ag_news" \
+	--model "distilbert/distilbert-base-uncased" \
+	--output_dir "/root/ftg/results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 5 \
+	--learning_rate 5e-5 \
+	--full 
+
+train_full_amazon:
+	python train.py \
+	--dataset "yassiracharki/Amazon_Reviews_for_Sentiment_Analysis_fine_grained_5_classes" \
+	--model "distilbert/distilbert-base-uncased" \
+	--output_dir "/root/ftg/results" \
+	--output_prefix "experiment_name" \
+	--batch_size 64 \
+	--num_labels 6 \
+	--learning_rate 5e-5 \
 	--full 
 
 train_full:

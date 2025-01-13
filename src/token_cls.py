@@ -2,31 +2,25 @@
 BERT MLM runner
 """
 
-import ast
 import random
-import json
 import time
 import argparse
 import logging
 import os
-import copy
 
 import jsonlines
 import torch
-import torch.nn.functional as F
 import numpy as np
 from datasets import load_dataset
 from tqdm import tqdm
 from transformers import BertTokenizer
-from custom_bert import BertForMaskedLM
 from module.func import (
-    scaled_input,
     convert_to_triplet_ig_top,
-    extract_random_samples,
     parse_comma_separated,
 )
-from model import CustomBertForMaskedLM
+from model import CustomBertForSequenceClassification
 from pprint import pprint
+
 # set logger
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -34,63 +28,6 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
-
-
-def example2feature(example, max_seq_length, tokenizer):
-    """将示例转换为输入特征"""
-    features = []
-    tokenslist = []
-
-    ori_tokens = tokenizer.tokenize(example)  # 对文本进行分词
-    # 如果文本长度超过最大序列长度，进行截断
-    if len(ori_tokens) > max_seq_length - 2:
-        ori_tokens = ori_tokens[: max_seq_length - 2]
-
-    # 在文本中随机选择一个位置添加 [MASK]
-    mask_position = random.randint(
-        1, len(ori_tokens) - 1
-    )  # 避免将 [MASK] 添加到 [CLS] 或 [SEP] 位置
-    gold_obj = ori_tokens[mask_position]  # 原始 token 作为 gold_obj
-    ori_tokens[mask_position] = "[MASK]"  # 在随机位置插入 [MASK]
-
-    # 添加特殊字符 ([CLS], [SEP])
-    tokens = ["[CLS]"] + ori_tokens + ["[SEP]"]
-    base_tokens = ["[UNK]"] + ["[UNK]"] * len(ori_tokens) + ["[UNK]"]
-    segment_ids = [0] * len(tokens)
-
-    # 生成 token ID 和 attention mask
-    input_ids = tokenizer.convert_tokens_to_ids(tokens)
-    baseline_ids = tokenizer.convert_tokens_to_ids(base_tokens)
-    input_mask = [1] * len(input_ids)
-
-    # 填充 [PAD] 到最大序列长度
-    padding = [0] * (max_seq_length - len(input_ids))
-    input_ids += padding
-    baseline_ids += padding
-    segment_ids += padding
-    input_mask += padding
-
-    # 断言填充后的长度是正确的
-    assert len(baseline_ids) == max_seq_length
-    assert len(input_ids) == max_seq_length
-    assert len(input_mask) == max_seq_length
-    assert len(segment_ids) == max_seq_length
-
-    features = {
-        "input_ids": input_ids,
-        "input_mask": input_mask,
-        "segment_ids": segment_ids,
-        "baseline_ids": baseline_ids,
-    }
-    tokens_info = {
-        "tokens": tokens,
-        "gold_obj": gold_obj,  # 保存掩码位置的原始 token 作为 gold_obj
-        "pred_obj": None,  # 预测的对象，这里是占位符
-    }
-    return features, tokens_info
-
-
-RETENTION_THRESHOLD = 99
 
 
 if __name__ == "__main__":
@@ -209,9 +146,9 @@ if __name__ == "__main__":
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
-    model = CustomBertForMaskedLM.from_pretrained(
+    model = CustomBertForSequenceClassification.from_pretrained(
         args.bert_model, cache_dir="/cache/huggingface/hub"
-    )
+    ).half()
     model.to(device)
 
     # data parallel
@@ -222,56 +159,49 @@ if __name__ == "__main__":
     dataset = load_dataset(
         *args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets"
     )
-    # dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-    # sample_text = [i for i in dataset["train"]["text"][10:15] if i.strip() != ""]
-    # sample_text = extract_random_samples(dataset, args.num_sample)
-    dataset = (dataset["train"].shuffle(seed=42).select(range(args.num_sample)))["text"]
+
+    def tokenize_function(examples):
+        return tokenizer(
+            examples["text"],
+            padding="max_length",
+            truncation=True,
+            max_length=512,
+        )
+
+    dataset = dataset["train"].shuffle(seed=42).select(range(args.num_sample))
+    tokenized_train = dataset.map(tokenize_function, batched=True, num_proc=32)
     # evaluate args.debug bags for each relation
 
     res_dict_bag = []
-    for text in tqdm(dataset):
+
+    for item in tqdm(tokenized_train):
         # record running time
         tic = time.perf_counter()
-        try:
-            eval_features, tokens_info = example2feature(
-                text, args.max_seq_length, tokenizer
-            )
-        except:
-            continue
-        # convert features to long type tensors
-        baseline_ids, input_ids, input_mask, segment_ids = (
-            eval_features["baseline_ids"],
-            eval_features["input_ids"],
-            eval_features["input_mask"],
-            eval_features["segment_ids"],
-        )
-        baseline_ids = torch.tensor(baseline_ids, dtype=torch.long).unsqueeze(0)
-        input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0)
-        input_mask = torch.tensor(input_mask, dtype=torch.long).unsqueeze(0)
-        segment_ids = torch.tensor(segment_ids, dtype=torch.long).unsqueeze(0)
-        baseline_ids = baseline_ids.to(device)
-        input_ids = input_ids.to(device)
-        input_mask = input_mask.to(device)
-        segment_ids = segment_ids.to(device)
 
-        # record real input length
-        input_len = int(input_mask[0].sum())
-
-        # record [MASK]'s position
-        tgt_pos = tokens_info["tokens"].index("[MASK]")
-
+        cls_id = tokenizer.convert_tokens_to_ids('[CLS]')
         # record various results
         res_dict = {"pred": [], "ig_pred": [], "ig_gold": [], "base": []}
+
+        # Move input tensors to the same device as the model
+        input_ids = torch.tensor(item["input_ids"]).unsqueeze(0).to(device)
+        attention_mask = torch.tensor(item["attention_mask"]).unsqueeze(0).to(device)
+
+        cls_pos = 0
+        # cls_pos = input_ids.index(cls_id)
 
         # original pred prob
         outputs = model(
             input_ids=input_ids,
-            attention_mask=input_mask,
-            token_type_ids=segment_ids,
+            attention_mask=attention_mask,
         )
         logits = outputs.logits
-        pred_label = int(torch.argmax(logits[0, tgt_pos, :]))  # scalar
-        model.forward_with_partitioning(target_position=tgt_pos)
+        predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
+
+        # predicted_class = torch.argmax(logits, dim=-1).item()
+        print(f"Predicted class: {predicted_class}")
+        label_map = model.config.id2label
+        print(f"Predicted label: {label_map[predicted_class]}")
+        model.forward_with_partitioning(target_position=cls_pos)
         gold_label = tokenizer.convert_tokens_to_ids(tokens_info["gold_obj"])
         tokens_info["pred_obj"] = tokenizer.convert_ids_to_tokens(pred_label)
         ig_gold = model.calulate_integrated_gradients(target_label=gold_label)
@@ -291,7 +221,7 @@ if __name__ == "__main__":
         # record running time
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
-        pprint(torch.cuda.memory_stats())
+        # pprint(torch.cuda.memory_stats())
         model.clean()
 
     with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:

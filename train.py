@@ -6,21 +6,23 @@ from transformers import (
     Trainer,
     TrainingArguments,
     AutoTokenizer,
-    AutoModelForSequenceClassification
+    AutoModelForSequenceClassification,
 )
 from datasets import load_dataset
 
 from src.module.func import (
     unfreeze_ffn_connections_with_hooks_optimized,
     compute_metrics,
-    parse_comma_separated
+    parse_comma_separated,
 )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset", default=None, type=parse_comma_separated, required=True)
+    parser.add_argument(
+        "--dataset", default=None, type=parse_comma_separated, required=True
+    )
     parser.add_argument("--target_neurons_path", default=None, type=str)
 
     parser.add_argument(
@@ -60,14 +62,18 @@ if __name__ == "__main__":
     )
     # 加载模型
     model = AutoModelForSequenceClassification.from_pretrained(
-        args.model, num_labels=args.num_labels, cache_dir="/cache/huggingface/hub"
+        args.model,
+        num_labels=args.num_labels,
+        cache_dir="/cache/huggingface/hub",
+        # problem_type="multi_label_classification", # 单文本多标签
     )
 
     # 数据预处理
     def tokenize_function(examples):
         return tokenizer(
-            examples["sentence"], padding="max_length", truncation=True, max_length=512
+            examples["review_text"], padding="max_length", truncation=True, max_length=512
         )
+    dataset = dataset.rename_column("class_index", "label")
 
     tokenized_train = dataset["train"].map(tokenize_function, batched=True, num_proc=32)
     tokenized_test = dataset["test"].map(tokenize_function, batched=True, num_proc=32)
@@ -110,7 +116,7 @@ if __name__ == "__main__":
     print(model)
     log_dir = f"logs/run_{time.strftime('%Y_%m_%d_%H:%M:%S')}_{args.dataset}"
     training_args = TrainingArguments(
-        output_dir=f"{args.output_dir}/run_{time.strftime('%Y_%m_%d_%H:%M:%S')}_{args.dataset}",  # 保存模型的路径
+        output_dir=f"{args.output_dir}/run_{time.strftime('%m_%d_%H:%M')}_{args.dataset}",  # 保存模型的路径
         eval_strategy="epoch",  # 每个 epoch 进行一次评估
         learning_rate=args.learning_rate,  # 学习率
         per_device_train_batch_size=args.batch_size,
@@ -122,8 +128,10 @@ if __name__ == "__main__":
         save_steps=1000,
         save_total_limit=2,  # 最多保存两个模型
         save_strategy="epoch",
-        fp16=True
+        fp16=True,
+        # label_names=["class_index"]
     )
+
     class CustomTrainer(Trainer):
         def training_step(self, model, inputs, return_outputs=False):
             # 获取目标标签
@@ -132,12 +140,14 @@ if __name__ == "__main__":
             # 检查目标标签的范围
             n_classes = model.config.num_labels
             if labels.min() < 0 or labels.max() >= n_classes:
-                raise ValueError(f"Target labels out of range! Expected between 0 and {n_classes - 1}, but got min={labels.min()}, max={labels.max()}.")
-            
+                raise ValueError(
+                    f"Target labels out of range! Expected between 0 and {n_classes - 1}, but got min={labels.min()}, max={labels.max()}."
+                )
+
             # 调用父类的 training_step 来继续训练过程
             return super().training_step(model, inputs, return_outputs)
-    
-    trainer = CustomTrainer(
+
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_train,
