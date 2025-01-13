@@ -85,7 +85,8 @@ train_full_ag_news:
 	--batch_size 16 \
 	--num_labels 5 \
 	--learning_rate 5e-5 \
-	--full 
+	--full \
+	--num_train_epochs 6
 
 train_full_amazon:
 	python train.py \
@@ -96,7 +97,8 @@ train_full_amazon:
 	--batch_size 64 \
 	--num_labels 6 \
 	--learning_rate 5e-5 \
-	--full 
+	--full \
+	--num_train_epochs 6
 
 train_full_imdb:
 	python train.py \

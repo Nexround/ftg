@@ -48,6 +48,7 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", default=5e-5, type=float)
     parser.add_argument("--batch_size", default=16, type=int)
     parser.add_argument("--num_labels", default=2, type=int)
+    parser.add_argument("--num_train_epochs", default=3, type=int)
     parser.add_argument(
         "--lora", default=False, action="store_true", help="Use LoRA optimizer"
     )
@@ -71,12 +72,12 @@ if __name__ == "__main__":
     # 数据预处理
     def tokenize_function(examples):
         return tokenizer(
-            examples["text"], padding="max_length", truncation=True, max_length=512
+            examples["review_text"], padding="max_length", truncation=True, max_length=512
         )
-    # dataset = dataset.rename_column("class_index", "label")
+    dataset = dataset.rename_column("class_index", "label")
 
-    tokenized_train = dataset["train"].map(tokenize_function, batched=True, num_proc=32)
-    tokenized_test = dataset["test"].map(tokenize_function, batched=True, num_proc=32)
+    tokenized_train = dataset["train"].shuffle(seed=42).map(tokenize_function, batched=True, num_proc=32)
+    tokenized_test = dataset["test"].shuffle(seed=42).map(tokenize_function, batched=True, num_proc=32)
 
     # 4. 设置 PyTorch Dataset
     tokenized_train.set_format(
@@ -121,7 +122,7 @@ if __name__ == "__main__":
         learning_rate=args.learning_rate,  # 学习率
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
-        num_train_epochs=3,  # 训练 epoch 数
+        num_train_epochs=args.num_train_epochs,  # 训练 epoch 数
         # weight_decay=0.01,  # 权重衰减
         logging_dir=log_dir,  # 日志路径
         logging_steps=500,
