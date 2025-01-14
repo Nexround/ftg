@@ -66,18 +66,28 @@ if __name__ == "__main__":
         args.model,
         num_labels=args.num_labels,
         cache_dir="/cache/huggingface/hub",
+        ignore_mismatched_sizes=True,
         # problem_type="multi_label_classification", # 单文本多标签
     )
 
     # 数据预处理
     def tokenize_function(examples):
         return tokenizer(
-            examples["review_text"], padding="max_length", truncation=True, max_length=512
+            examples["text"], padding="max_length", truncation=True, max_length=512
         )
-    dataset = dataset.rename_column("class_index", "label")
 
-    tokenized_train = dataset["train"].shuffle(seed=42).map(tokenize_function, batched=True, num_proc=32)
-    tokenized_test = dataset["test"].shuffle(seed=42).map(tokenize_function, batched=True, num_proc=32)
+    # dataset = dataset.rename_column("class_index", "label")
+
+    tokenized_train = (
+        dataset["train"]
+        .shuffle(seed=42)
+        .map(tokenize_function, batched=True, num_proc=32)
+    )
+    tokenized_test = (
+        dataset["test"]
+        .shuffle(seed=42)
+        .map(tokenize_function, batched=True, num_proc=32)
+    )
 
     # 4. 设置 PyTorch Dataset
     tokenized_train.set_format(
@@ -132,21 +142,6 @@ if __name__ == "__main__":
         fp16=True,
         # label_names=["class_index"]
     )
-
-    class CustomTrainer(Trainer):
-        def training_step(self, model, inputs, return_outputs=False):
-            # 获取目标标签
-            labels = inputs.get("labels")
-            
-            # 检查目标标签的范围
-            n_classes = model.config.num_labels
-            if labels.min() < 0 or labels.max() >= n_classes:
-                raise ValueError(
-                    f"Target labels out of range! Expected between 0 and {n_classes - 1}, but got min={labels.min()}, max={labels.max()}."
-                )
-
-            # 调用父类的 training_step 来继续训练过程
-            return super().training_step(model, inputs, return_outputs)
 
     trainer = Trainer(
         model=model,

@@ -31,7 +31,8 @@ def extract_coordinates(jsonl_file):
 def filter_counter(counter_obj):
     # 计算平均值
     mean_value = int(sum(counter_obj.values()) / len(counter_obj))
-    threshold = int(mean_value * 0.1)
+    threshold = int(mean_value * 0)
+    # threshold = int(mean_value * 0.1)
     # 过滤元素
     filtered_counter = {
         key: value for key, value in counter_obj.items() if value >= threshold

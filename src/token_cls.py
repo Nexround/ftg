@@ -30,6 +30,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# 加载第一个模型
+fine_tuned_bert_model = CustomBertForSequenceClassification.from_pretrained(
+    "/openbayes/home/ftg/results/agnews_checkpoint-22500"
+)
+
+# 加载第二个模型
+fine_tuned_classifier_model = CustomBertForSequenceClassification.from_pretrained(
+    "/openbayes/home/ftg/results/train_full_imdb"
+)
+
+fine_tuned_bert_model.classifier = fine_tuned_classifier_model.classifier
+del fine_tuned_classifier_model
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -99,9 +113,10 @@ if __name__ == "__main__":
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
-    model = CustomBertForSequenceClassification.from_pretrained(
-        args.bert_model, cache_dir="/cache/huggingface/hub"
-    ).half()
+    # model = CustomBertForSequenceClassification.from_pretrained(
+    #     args.bert_model, cache_dir="/cache/huggingface/hub"
+    # ).half()
+    model = fine_tuned_bert_model
     model.to(device)
 
     # data parallel
@@ -150,9 +165,10 @@ if __name__ == "__main__":
         )
         logits = outputs.logits
         predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
-        if gold_class != predicted_class:
-            model.clean()
-            continue
+        # if gold_class != predicted_class:
+        #     print("wrong")
+        #     model.clean()
+        #     continue
         """
         若预测类别与真实类别不一致，则跳过
         只处理[cls]位置上的ig
@@ -163,7 +179,7 @@ if __name__ == "__main__":
         # label_map = model.config.id2label
         # print(f"Predicted label: {label_map[predicted_class]}")
         model.forward_with_partitioning(target_position=cls_pos)
-        ig_gold = model.calulate_integrated_gradients(target_label=gold_class)
+        ig_gold = model.calulate_integrated_gradients(target_label=predicted_class)
         for ig in ig_gold:
             # 为batch inference预留的for
             ig = ig.cpu().detach()

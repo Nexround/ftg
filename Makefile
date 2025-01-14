@@ -65,6 +65,28 @@ token_cls_imdb:
 	--num_sample 10000 \
 	--retention_threshold 99 
 
+token_cls_agnews:
+	python ./src/token_cls.py \
+	--bert_model /openbayes/home/ftg/results/agnews_checkpoint-22500 \
+	--output_dir ./results \
+	--max_seq_length 256 \
+	--batch_size 20 \
+	--result_file token_cls_agnews.json \
+	--dataset fancyzhx/ag_news \
+	--num_sample 10000 \
+	--retention_threshold 99 
+
+token_cls_agnews_bert_imdb_cls:
+	python ./src/token_cls.py \
+	--bert_model /openbayes/home/ftg/results/agnews_checkpoint-22500 \
+	--output_dir ./results \
+	--max_seq_length 128 \
+	--batch_size 20 \
+	--result_file token_cls_agnews_bert_imdb_cls.json \
+	--dataset imdb \
+	--num_sample 10000 \
+	--retention_threshold 99 
+
 train_full_yelp:
 	python train.py \
 	--dataset "Yelp/yelp_review_full" \
@@ -80,13 +102,26 @@ train_full_ag_news:
 	python train.py \
 	--dataset "fancyzhx/ag_news" \
 	--model "distilbert/distilbert-base-uncased" \
-	--output_dir "/root/ftg/results" \
+	--output_dir "./results" \
 	--output_prefix "experiment_name" \
 	--batch_size 16 \
 	--num_labels 5 \
 	--learning_rate 5e-5 \
 	--full \
-	--num_train_epochs 6
+	--num_train_epochs 3
+
+train_full_ag_news_bert:
+# 原始bert
+	python train.py \
+	--dataset "fancyzhx/ag_news" \
+	--model "bert-base-cased" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 5 \
+	--learning_rate 5e-5 \
+	--full \
+	--num_train_epochs 3
 
 train_full_amazon:
 	python train.py \
@@ -105,6 +140,18 @@ train_full_imdb:
 	--dataset "imdb" \
 	--model "bert-base-cased" \
 	--output_dir "/root/ftg/results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 2 \
+	--full
+
+train_full_imdb_on_agnews:
+# 在agnews模型基础上训练imdb
+# 'eval_accuracy': 0.92044
+	python train.py \
+	--dataset "imdb" \
+	--model "/openbayes/home/ftg/results/agnews_checkpoint-22500" \
+	--output_dir "./results" \
 	--output_prefix "experiment_name" \
 	--batch_size 16 \
 	--num_labels 2 \
@@ -131,3 +178,28 @@ train_target_sst2:
 	--batch_size 16 \
 	--num_labels 2 \
 	--train_target_neurons \
+
+train_target_token_cls_agnews_bert_imdb_cls_complement_1:
+	python train.py \
+	--dataset "imdb" \
+	--target_neurons_path "/openbayes/home/ftg/token_cls_agnews_bert_imdb_cls_complement_1.json" \
+	--model "/openbayes/home/ftg/results/agnews_checkpoint-22500" \
+	--output_dir "/root/ftg/results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 2 \
+	--train_target_neurons \
+
+train_target_token_cls_agnews_bert_imdb_cls_complement_1_high:
+# 'eval_accuracy': 0.90916
+	python train.py \
+	--dataset "imdb" \
+	--target_neurons_path "/openbayes/home/ftg/token_cls_agnews_bert_imdb_cls_complement_1.json" \
+	--model "/openbayes/home/ftg/results/agnews_checkpoint-22500" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 2 \
+	--train_target_neurons \
+	--learning_rate 5e-4 \
+	

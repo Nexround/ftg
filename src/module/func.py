@@ -42,15 +42,23 @@ def scaled_input(emb, batch_size, num_batch):
 import matplotlib.pyplot as plt
 
 
-def scatter_plot(counter_obj):
+def scatter_plot(counter_obj, highlight_duplicates=None):
     x = [key[0] for key in counter_obj.keys()]
     y = [key[1] for key in counter_obj.keys()]
-    sizes = [value * 10 for value in counter_obj.values()]  # 调整点大小以反映计数
+    sizes = [value * 0.001 for value in counter_obj.values()]  # 调整点大小以反映计数
 
-    plt.scatter(x, y, s=sizes, alpha=0.6, color="skyblue", edgecolor="black")
+    plt.scatter(x, y, s=sizes, alpha=0.6, color="skyblue", edgecolor="black", label="All Points")
+
+    # Highlight duplicate points if provided
+    if highlight_duplicates:
+        dup_x = [key[0] for key in highlight_duplicates]
+        dup_y = [key[1] for key in highlight_duplicates]
+        plt.scatter(dup_x, dup_y, s=50, alpha=0.9, color="red", label="Duplicates")
+
     plt.xlabel("X values")
     plt.ylabel("Y values")
     plt.title("Scatter plot of (x, y) counts")
+    plt.legend()
     plt.show()
 
 
