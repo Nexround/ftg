@@ -1,8 +1,25 @@
 import torch
 import numpy as np
+from scipy.optimize import minimize
+
 import random
 from collections import defaultdict
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+
+
+def generate_minimal_dot_product_vectors(dim=128, num_labels=6):
+    def loss_fn(flat_vectors):
+        vectors = flat_vectors.reshape(num_labels, dim)
+        dot_products = np.dot(vectors, vectors.T)
+        loss = np.sum(dot_products) - np.trace(dot_products)
+        return loss
+
+    initial_vectors = np.random.randn(num_labels, dim)
+    initial_vectors /= np.linalg.norm(initial_vectors, axis=1, keepdims=True)
+    result = minimize(
+        loss_fn, initial_vectors.flatten(), method="L-BFGS-B", options={"disp": True}
+    )
+    return result.x.reshape(num_labels, dim)
 
 
 def scaled_input(emb, batch_size, num_batch):
@@ -47,7 +64,9 @@ def scatter_plot(counter_obj, highlight_duplicates=None):
     y = [key[1] for key in counter_obj.keys()]
     sizes = [value * 0.001 for value in counter_obj.values()]  # 调整点大小以反映计数
 
-    plt.scatter(x, y, s=sizes, alpha=0.6, color="skyblue", edgecolor="black", label="All Points")
+    plt.scatter(
+        x, y, s=sizes, alpha=0.6, color="skyblue", edgecolor="black", label="All Points"
+    )
 
     # Highlight duplicate points if provided
     if highlight_duplicates:
@@ -210,8 +229,8 @@ def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
         # 确保权重和偏置的 requires_grad 为 True
         intermediate_dense.weight.requires_grad = True
         intermediate_dense.bias.requires_grad = True
-        output_dense.weight.requires_grad = True
-        output_dense.bias.requires_grad = True
+        output_dense.weight.requires_grad = False # 不允许调整输出层权重
+        output_dense.bias.requires_grad = False
 
         # 注册单个钩子函数，针对输入权重的所有指定神经元
         def input_weight_hook(grad):
@@ -222,12 +241,12 @@ def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
         hooks.append(intermediate_dense.weight.register_hook(input_weight_hook))
 
         # 注册单个钩子函数，针对输出权重的所有指定神经元
-        def output_weight_hook(grad):
-            mask = torch.zeros_like(grad)
-            mask[:, neuron_indices] = 1  # 只允许指定神经元的梯度
-            return grad * mask
+        # def output_weight_hook(grad):
+        #     mask = torch.zeros_like(grad)
+        #     mask[:, neuron_indices] = 1  # 只允许指定神经元的梯度
+        #     return grad * mask
 
-        hooks.append(output_dense.weight.register_hook(output_weight_hook))
+        # hooks.append(output_dense.weight.register_hook(output_weight_hook))
 
         # 注册单个钩子函数，针对输入偏置的所有指定神经元
         def input_bias_hook(grad):
@@ -238,10 +257,11 @@ def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
         hooks.append(intermediate_dense.bias.register_hook(input_bias_hook))
 
         # 输出层偏置不需要区分神经元，保持全梯度
-        def output_bias_hook(grad):
-            return grad  # 不修改偏置梯度
+        # def output_bias_hook(grad):
+        #     mask = torch.zeros_like(grad)
+        #     return grad * mask  # 不允许调整输出层bias
 
-        hooks.append(output_dense.bias.register_hook(output_bias_hook))
+        # hooks.append(output_dense.bias.register_hook(output_bias_hook))
 
     return hooks  # 返回 hooks 以便后续管理和清理
 

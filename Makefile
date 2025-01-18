@@ -87,6 +87,28 @@ token_cls_agnews_bert_imdb_cls:
 	--num_sample 10000 \
 	--retention_threshold 99 
 
+tokencls_agnews:
+	python ./src/token_cls.py \
+	--bert_model /root/ftg/results/new_6tags_agnews_based_imdb \
+	--output_dir ./results \
+	--max_seq_length 256 \
+	--batch_size 20 \
+	--result_file tokencls_agnews.json \
+	--dataset fancyzhx/ag_news \
+	--num_sample 10000 \
+	--retention_threshold 99 
+
+tokencls_agnews_on_imdb:
+	python ./src/token_cls.py \
+	--bert_model /root/ftg/results/new_6tags_agnews_based_imdb \
+	--output_dir ./results \
+	--max_seq_length 256 \
+	--batch_size 20 \
+	--result_file tokencls_agnews_on_imdb.json \
+	--dataset imdb \
+	--num_sample 10000 \
+	--retention_threshold 99 
+
 train_full_yelp:
 	python train.py \
 	--dataset "Yelp/yelp_review_full" \
@@ -118,7 +140,20 @@ train_full_ag_news_bert:
 	--output_dir "./results" \
 	--output_prefix "experiment_name" \
 	--batch_size 16 \
-	--num_labels 5 \
+	--num_labels 4 \
+	--learning_rate 5e-5 \
+	--full \
+	--num_train_epochs 3
+
+train_full_ag_news_bert_6:
+# 原始bert 0.9468421052631579
+	python train.py \
+	--dataset "fancyzhx/ag_news" \
+	--model "bert-base-cased" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
 	--learning_rate 5e-5 \
 	--full \
 	--num_train_epochs 3
@@ -202,4 +237,214 @@ train_target_token_cls_agnews_bert_imdb_cls_complement_1_high:
 	--num_labels 2 \
 	--train_target_neurons \
 	--learning_rate 5e-4 \
+	
+train_target_token_cls_agnews_bert_imdb_cls_complement_1_high_improved:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/token_cls_agnews_bert_imdb_cls_complement_1.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 1e-4 \
+
+train_target_token_cls_agnews_bert_imdb_random:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/random_data.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 1e-5 \
+
+train_target_token_cls_agnews_bert_imdb_6:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/token_cls_agnews_bert_imdb_cls_complement_1.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--full \
+	--learning_rate 5e-5 \
+
+train_target_0115agnews_imdb:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/0115agnews_imdb.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 5e-5 \
+	
+train_target_0115agnews_imdb_random:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/random_data_1537.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 5e-5 \
+
+train_target_0115agnews_imdb:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/complement_2.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 5e-5 \
+	
+train_target_0115agnews_imdb_random:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/random_data_1537.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 5e-5 \
+
+train_target_0115agnews_imdb_random_5247:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/random_data_5247.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 5e-5 \
+
+train_target_0115agnews_imdb_random_10:
+	python train_target.py \
+	--dataset "imdb" \
+	--target_neurons_path "/root/ftg/random_data_10.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_target_neurons \
+	--learning_rate 5e-5 \
+
+train_ffn:
+	python train_target.py \
+	--dataset "imdb" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--ffn \
+	--learning_rate 5e-5 \
+
+train_lora_imdb:
+	python train_target.py \
+	--dataset "imdb" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option lora \
+	--learning_rate 5e-5 \
+
+train_scinews_target:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--target_neurons_path "/root/ftg/target_neurons/0115agnews_imdb.json" \
+	--model "/root/ftg/results/new_6tags_agnews_based_imdb" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option target_neurons \
+	--learning_rate 5e-5 \
+
+train_scinews_target_based_on_agnews_3labels:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--target_neurons_path "/root/ftg/target_neurons/0115agnews_imdb.json" \
+	--model "/root/ftg/results/_cache_huggingface_datasets_agnews_3labels_01_18_12:23/checkpoint-16875" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option target_neurons \
+	--learning_rate 5e-5 \
+
+train_scinews_target_based_on_agnews_3labels_random:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--target_neurons_path "/root/ftg/target_neurons/random_data_5247.json" \
+	--model "/root/ftg/results/_cache_huggingface_datasets_agnews_3labels_01_18_12:23/checkpoint-16875" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option target_neurons \
+	--learning_rate 5e-5 \
+
+train_agnews_6_full:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/agnews_3labels" \
+	--model "bert-base-cased" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option full \
+	--learning_rate 5e-5 \
+
+train_agnews_6_full_scinews_c_full:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--model "/root/ftg/results/agnews_3labels_01_18_12:23/checkpoint-16875" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option c_full \
+	--learning_rate 5e-5 \
+
+train_agnews_6_full_scinews_ffn:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--model "/root/ftg/results/agnews_3labels_01_18_12:23/checkpoint-16875" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option ffn \
+	--learning_rate 5e-5 \
+	
+train_agnews_6_full_scinews_lora:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--model "/root/ftg/results/agnews_3labels_01_18_12:23/checkpoint-16875" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option lora \
+	--learning_rate 5e-5 \
 	

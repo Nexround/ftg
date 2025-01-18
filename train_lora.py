@@ -4,11 +4,11 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-from datasets import load_dataset
+from datasets import load_dataset, ClassLabel
 from peft import LoraConfig, get_peft_model
 import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-from shared import training_args, compute_metrics  # 加载IMDB数据集
+from src.module.func import compute_metrics  # 加载IMDB数据集
 import time
 import os
 
@@ -19,10 +19,28 @@ tokenizer = BertTokenizer.from_pretrained(
     "bert-base-uncased", cache_dir="/cache/huggingface/hub"
 )
 model = BertForSequenceClassification.from_pretrained(
-    "bert-base-uncased", num_labels=2, cache_dir="/cache/huggingface/hub"
+    "/root/ftg/results/new_6tags_agnews_based_imdb", cache_dir="/cache/huggingface/hub"
 )
 
+new_class_labels = ClassLabel(
+        num_classes=6, names=["World", "Sports", "Business", "Sci/Tech", "neg", "pos"]
+    )
+dataset = dataset.cast_column("label", new_class_labels)
 
+    # 应用映射函数
+    # updated_dataset = dataset.map(update_label)
+def update_label(example):
+    original_label = example["label"]
+
+    # 重新映射原始标签d
+    if original_label == 0:
+        example["label"] = 4  # 原标签 0 -> 新标签 3
+    elif original_label == 1:
+        example["label"] = 5  # 原标签 1 -> 新标签 4
+
+    return example
+
+dataset = dataset.map(update_label)
 def tokenize_function(examples):
     return tokenizer(
         examples["text"], padding="max_length", truncation=True, max_length=512

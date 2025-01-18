@@ -1,7 +1,3 @@
-"""
-BERT MLM runner
-"""
-
 import random
 import time
 import argparse
@@ -30,18 +26,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# 加载第一个模型
-fine_tuned_bert_model = CustomBertForSequenceClassification.from_pretrained(
-    "/openbayes/home/ftg/results/agnews_checkpoint-22500"
-)
+# # 加载第一个模型
+# fine_tuned_bert_model = CustomBertForSequenceClassification.from_pretrained(
+#     "/openbayes/home/ftg/results/agnews_checkpoint-22500"
+# )
 
-# 加载第二个模型
-fine_tuned_classifier_model = CustomBertForSequenceClassification.from_pretrained(
-    "/openbayes/home/ftg/results/train_full_imdb"
-)
+# # 加载第二个模型
+# fine_tuned_classifier_model = CustomBertForSequenceClassification.from_pretrained(
+#     "/openbayes/home/ftg/results/train_full_imdb"
+# )
 
-fine_tuned_bert_model.classifier = fine_tuned_classifier_model.classifier
-del fine_tuned_classifier_model
+# fine_tuned_bert_model.classifier = fine_tuned_classifier_model.classifier
+# del fine_tuned_classifier_model
 
 
 if __name__ == "__main__":
@@ -113,10 +109,10 @@ if __name__ == "__main__":
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
-    # model = CustomBertForSequenceClassification.from_pretrained(
-    #     args.bert_model, cache_dir="/cache/huggingface/hub"
-    # ).half()
-    model = fine_tuned_bert_model
+    model = CustomBertForSequenceClassification.from_pretrained(
+        args.bert_model, cache_dir="/cache/huggingface/hub"
+    ).half()
+    # model = fine_tuned_bert_model
     model.to(device)
 
     # data parallel
