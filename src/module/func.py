@@ -6,6 +6,53 @@ import random
 from collections import defaultdict
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
+import torch.nn as nn
+
+class MinimalDotProductClassifier(nn.Module):
+    def __init__(self, hidden_size, num_labels):
+        super().__init__()
+        self.num_labels = num_labels
+        
+        # Create the classifier layer
+        self.classifier = nn.Linear(hidden_size, num_labels)
+        
+        # Initialize the classifier weights with the minimal dot product vectors
+        classifier_weights = self._generate_minimal_dot_product_vectors(
+            dim=hidden_size, num_labels=num_labels
+        )
+        
+        self.classifier.weight.data = torch.tensor(
+            classifier_weights, dtype=torch.float32
+        )
+        
+        # Initialize the bias to zero
+        self.classifier.bias.data.fill_(0.0)
+        
+        # Freeze the classifier parameters (set requires_grad=False)
+        for param in self.classifier.parameters():
+            param.requires_grad = False
+
+    def _generate_minimal_dot_product_vectors(self, dim=128, num_labels=6):
+        def loss_fn(flat_vectors):
+            vectors = flat_vectors.reshape(num_labels, dim)
+            dot_products = np.dot(vectors, vectors.T)
+            loss = np.sum(dot_products) - np.trace(dot_products)
+            return loss
+
+        initial_vectors = np.random.randn(num_labels, dim)
+        initial_vectors /= np.linalg.norm(initial_vectors, axis=1, keepdims=True)
+        result = minimize(
+            loss_fn, initial_vectors.flatten(), method="L-BFGS-B", options={"disp": True}
+        )
+        return result.x.reshape(num_labels, dim)
+
+    def forward(self, x):
+        # Check if x is 3D (batch_size, seq_len, hidden_size)
+        if x.ndimension() == 3:
+            x = x[:, 0, :]  # Take the first token/sequence element
+        
+        logits = self.classifier(x)
+        return logits
 
 def generate_minimal_dot_product_vectors(dim=128, num_labels=6):
     def loss_fn(flat_vectors):

@@ -10,16 +10,19 @@ from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     AutoConfig,
+    BertForSequenceClassification,
 )
 from peft import LoraConfig, get_peft_model
 
 from datasets import load_dataset, load_from_disk
 import torch
+from torch import nn
 from src.module.func import (
     unfreeze_ffn_connections_with_hooks_optimized,
     compute_metrics,
     parse_comma_separated,
     generate_minimal_dot_product_vectors,
+    MinimalDotProductClassifier,
 )
 
 from datasets import ClassLabel
@@ -30,7 +33,7 @@ class TrainOption(Enum):
     LORA = "lora"
     FFN = "ffn"
     FULL = "full"
-    C_FULL = "c_full" # continue full
+    C_FULL = "c_full"  # continue full
     TARGET = "target_neurons"
     ONLY_HEAD = "only_head"
 
@@ -50,6 +53,12 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
+    )
+    parser.add_argument(
+        "--label_json",
+        default=None,
+        type=str,
+        required=False,
     )
     parser.add_argument(
         "--output_dir",
@@ -198,40 +207,36 @@ if __name__ == "__main__":
         print("=== Training full ===")
         print("=====================")
         config = AutoConfig.from_pretrained(args.model)
-
-        # 修改 id2label 和 label2id
-        config.label2id = {
-            "World": 0,
-            "Sports": 1,
-            "Business": 2,
-            "Physics": 3,
-            "Medicine": 4,
-            "Biology": 5,
-        }
-        config.id2label = {value: key for key, value in config.label2id.items()}
+        with open(args.label_json, "r", encoding="utf-8") as f:
+            label_json = json.load(f)
+            # 修改 id2label 和 label2id
+            config.label2id = label_json
+            # config.label2id = {
+            #     "World": 0,
+            #     "Sports": 1,
+            #     "Business": 2,
+            #     "Physics": 3,
+            #     "Medicine": 4,
+            #     "Biology": 5,
+            # }
+            config.id2label = {value: key for key, value in config.label2id.items()}
         model = AutoModelForSequenceClassification.from_pretrained(
             args.model,
             config=config,
             cache_dir="/cache/huggingface/hub",
         )
-        classifier_weights = generate_minimal_dot_product_vectors(
-            dim=model.config.hidden_size, num_labels=args.num_labels
+        model.classifier = MinimalDotProductClassifier(
+            model.config.hidden_size, model.config.num_labels
         )
-        model.classifier.weight.data = torch.tensor(
-            classifier_weights, dtype=torch.float32
-        )
-        model.classifier.bias.data.fill_(0.0)
-        for param in model.classifier.parameters():
-            param.requires_grad = False
-            
+
     elif args.train_option == "c_full":
         print("=====================")
         print("=== Continue Training full ===")
         print("=====================")
         # 只冻结 classifier 的参数
         for param in model.classifier.parameters():
-            param.requires_grad = False 
-            
+            param.requires_grad = False
+
     elif args.train_option == "lora":
         print("=====================")
         print("=== Training lora ===")
@@ -295,12 +300,15 @@ if __name__ == "__main__":
     trainer.train()
     with open(f"{output_dir}/training_args.json", "w", encoding="utf-8") as f:
         json.dump(training_args.to_dict(), f, indent=4)
+    with open(f"{output_dir}/args.json", "w", encoding="utf-8") as json_file:
+        args_dict = vars(args)
+        json.dump(args_dict, json_file, indent=4)
     if args.train_option == "train_target_neurons":
         for hook in hooks:
             hook.remove()
     if args.train_option == "lora":
         model = model.merge_and_unload()
         model.save_pretrained(f"{output_dir}/lora")
-    eval_results = trainer.evaluate()
     with open(f"{output_dir}/eval_results.json", "w", encoding="utf-8") as f:
+        eval_results = trainer.evaluate()
         json.dump(eval_results, f, indent=4)

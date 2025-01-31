@@ -65,6 +65,17 @@ token_cls_imdb:
 	--num_sample 10000 \
 	--retention_threshold 99 
 
+lm_h4:
+	python lm_analyse.py \
+	--model_path Qwen/Qwen2.5-0.5B-Instruct \
+	--output_dir ./results \
+	--max_seq_length 32768 \
+	--batch_size 8 \
+	--result_file lm_h4.json \
+	--dataset HuggingFaceH4/helpful-instructions \
+	--num_sample 10000 \
+	--retention_threshold 99 
+
 token_cls_agnews:
 	python ./src/token_cls.py \
 	--bert_model /openbayes/home/ftg/results/agnews_checkpoint-22500 \
@@ -404,6 +415,30 @@ train_scinews_target_based_on_agnews_3labels_random:
 	--train_option target_neurons \
 	--learning_rate 5e-5 \
 
+train_scinews_target_based_on_agnews_3labels_random_10:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--target_neurons_path "/root/ftg/target_neurons/random_data_10.json" \
+	--model "/root/ftg/results/agnews_3labels_01_18_12:23/checkpoint-16875" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option target_neurons \
+	--learning_rate 5e-5 \
+
+train_scinews_target_based_on_agnews_3labels_random_100:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/SciNews_3labels" \
+	--target_neurons_path "/root/ftg/target_neurons/random_data_100.json" \
+	--model "/root/ftg/results/agnews_3labels_01_18_12:23/checkpoint-16875" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 16 \
+	--num_labels 6 \
+	--train_option target_neurons \
+	--learning_rate 5e-5 \
+
 train_agnews_6_full:
 	python train_target.py \
 	--dataset "/cache/huggingface/datasets/agnews_3labels" \
@@ -448,3 +483,27 @@ train_agnews_6_full_scinews_lora:
 	--train_option lora \
 	--learning_rate 5e-5 \
 	
+train_agnews_14_full:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/ag_news_14labels" \
+	--label_json /root/ftg/train_config/label_0.json \
+	--model "bert-base-cased" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 32 \
+	--num_labels 22 \
+	--train_option full \
+	--learning_rate 5e-5 \
+
+train_agnews_14_full_roberta:
+	python train_target.py \
+	--dataset "/cache/huggingface/datasets/ag_news_14labels" \
+	--label_json /root/ftg/train_config/label_0.json \
+	--model "FacebookAI/roberta-base" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 32 \
+	--num_labels 22 \
+	--train_option full \
+	--learning_rate 5e-5 \
+	--num_train_epochs 9

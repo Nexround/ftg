@@ -6,7 +6,7 @@ import ast
 import random
 import json
 import time
-import argparse
+import argparses
 import logging
 import os
 import copy
@@ -25,7 +25,7 @@ from module.func import (
     extract_random_samples,
     parse_comma_separated,
 )
-from model import CustomBertForMaskedLM
+from module.model import CustomBertForMaskedLM
 from pprint import pprint
 # set logger
 logging.basicConfig(

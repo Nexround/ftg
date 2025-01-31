@@ -9,12 +9,12 @@ import torch
 import numpy as np
 from datasets import load_dataset
 from tqdm import tqdm
-from transformers import BertTokenizer
-from module.func import (
+from transformers import AutoTokenizer
+from src.module.func import (
     convert_to_triplet_ig_top,
     parse_comma_separated,
 )
-from module.model import CustomBertForSequenceClassification
+from src.module.Qwen2Model import CustomQwen2ForCausalLM
 from pprint import pprint
 
 # set logger
@@ -26,25 +26,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# # 加载第一个模型
-# fine_tuned_bert_model = CustomBertForSequenceClassification.from_pretrained(
-#     "/openbayes/home/ftg/results/agnews_checkpoint-22500"
-# )
-
-# # 加载第二个模型
-# fine_tuned_classifier_model = CustomBertForSequenceClassification.from_pretrained(
-#     "/openbayes/home/ftg/results/train_full_imdb"
-# )
-
-# fine_tuned_bert_model.classifier = fine_tuned_classifier_model.classifier
-# del fine_tuned_classifier_model
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--bert_model",
+        "--model_path",
         default=None,
         type=str,
         required=True,
@@ -85,6 +71,14 @@ if __name__ == "__main__":
     # parse arguments
     args = parser.parse_args()
 
+    def get_gradient_size(model):
+        grad_size = sum(
+            p.grad.element_size() * p.grad.numel()
+            for p in model.parameters()
+            if p.grad is not None
+        )
+        return grad_size / 1024**2  # 转换为 MB
+
     device = torch.device("cuda:0")
     n_gpu = 1
 
@@ -104,77 +98,81 @@ if __name__ == "__main__":
     # save args
     os.makedirs(args.output_dir, exist_ok=True)
     # init tokenizer
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     # , do_lower_case=args.do_lower_case
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
-    model = CustomBertForSequenceClassification.from_pretrained(
-        args.bert_model, cache_dir="/cache/huggingface/hub"
-    ).half()
+    model = CustomQwen2ForCausalLM.from_pretrained(args.model_path).half()
     # model = fine_tuned_bert_model
     model.to(device)
 
     # data parallel
     if n_gpu > 1:
         model = torch.nn.DataParallel(model)
-    model.eval()
+
+    # model.eval()
+    def get_model_size(model):
+        param_size = sum(p.element_size() * p.numel() for p in model.parameters())
+        return param_size / 1024**2  # 转换为 MB
+
+    print(f"Model Weights Memory: {get_model_size(model):.2f} MB")
 
     dataset = load_dataset(
         *args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets"
     )
 
-    def tokenize_function(examples):
-        return tokenizer(
-            examples["text"],
-            padding="max_length",
-            truncation=True,
-            max_length=args.max_seq_length,
-        )
+    # def tokenize_function(examples):
+    #     # print(examples["instruction"])
+    #     messages = [
+    #         {
+    #             "role": "system",
+    #             "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.",
+    #         },
+    #         {"role": "user", "content": examples["instruction"]},
+    #     ]
+    #     text = tokenizer.apply_chat_template(
+    #         messages, tokenize=False, add_generation_prompt=True
+    #     )
+    #     return tokenizer(text, return_tensors="pt")
 
     dataset = dataset["train"].shuffle(seed=42).select(range(args.num_sample))
-    tokenized_train = dataset.map(tokenize_function, batched=True, num_proc=32)
+    # tokenized_train = dataset.map(tokenize_function, batched=True, num_proc=32)
     # evaluate args.debug bags for each relation
 
     record_list = []
-
-    for item in tqdm(tokenized_train):
+    for item in tqdm(dataset):
         # record running time
+        prompt = item["instruction"]
         tic = time.perf_counter()
-        gold_class = item["label"]
-        cls_id = tokenizer.convert_tokens_to_ids("[CLS]")
-        # record various results
-        ig_dict = {"ig_gold": []}
-
-        # Move input tensors to the same device as the model
-        input_ids = torch.tensor(item["input_ids"]).unsqueeze(0).to(device)
-        attention_mask = torch.tensor(item["attention_mask"]).unsqueeze(0).to(device)
-
-        cls_pos = 0
-        # cls_pos = input_ids.index(cls_id)
-
-        # original pred prob
-        outputs = model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            target_token_idx=cls_pos,
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+        text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
         )
-        logits = outputs.logits
+        model_inputs = tokenizer([text], return_tensors="pt")
+        # model_input = model_input.to(model.device)
+        ig_dict = {"ig_gold": []}
+        end_pos = len(model_inputs.data["input_ids"][0]) - 1
+        if end_pos > 100:
+            continue
+        model_inputs.to(model.device)
+        print(end_pos)
+        # original pred prob
+        logits = model.forward(
+            **(model_inputs.data),
+            target_token_idx=-1,
+            use_cache=False,
+        )
+        # logits = outputs.logits
         predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
-        # if gold_class != predicted_class:
-        #     print("wrong")
-        #     model.clean()
-        #     continue
-        """
-        若预测类别与真实类别不一致，则跳过
-        只处理[cls]位置上的ig
-        
-        """
-        # predicted_class = torch.argmax(logits, dim=-1).item()
-        # print(f"Predicted class: {predicted_class}")
-        # label_map = model.config.id2label
-        # print(f"Predicted label: {label_map[predicted_class]}")
-        model.forward_with_partitioning(target_position=cls_pos)
+
+        model.forward_with_partitioning(target_token_idx=-1)
         ig_gold = model.calulate_integrated_gradients(target_label=predicted_class)
         for ig in ig_gold:
             # 为batch inference预留的for
@@ -184,12 +182,14 @@ if __name__ == "__main__":
         ig_dict["ig_gold"] = convert_to_triplet_ig_top(
             ig_dict["ig_gold"], args.retention_threshold
         )
-        record_list.append([ig_dict])
         # record running time
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
         # pprint(torch.cuda.memory_stats())
+        print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
+
         model.clean()
+        model.zero_grad()
 
     with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:
         fw.write(record_list)

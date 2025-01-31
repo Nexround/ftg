@@ -17,37 +17,38 @@ from datasets import ClassLabel
 
 # 加载数据集（以IMDb影评数据集为例）
 # dataset = load_dataset("imdb", cache_dir="/cache/huggingface/datasets", split="test")
-dataset = load_from_disk("/cache/huggingface/datasets/SciNews_3labels")["test"]
+# dataset = load_from_disk("/cache/huggingface/datasets/SciNews_3labels")["test"]
+dataset = load_from_disk("/cache/huggingface/datasets/ag_news_14labels")['test']
 # dataset = load_dataset(
-#     "fancyzhx/ag_news", cache_dir="/cache/huggingface/datasets", split="test"
+#     "/cache/huggingface/datasets/ag_news_14labels", cache_dir="/cache/huggingface/datasets", split="test"
 # )
 # target_labels = ["World", "Sports", "Business"]  # 例：指定要保留的标签
 # target_labels = [0, 1, 2]  # 例：指定要保留的标签
 
 
 # dataset = dataset.filter(lambda x: x["label"] in target_labels)
-def update_label(example):
-    original_label = example["label"]
+# def update_label(example):
+#     original_label = example["label"]
 
-    # 重新映射原始标签d
-    if original_label == "Physics":
-        example["label"] = 3  # 原标签 0 -> 新标签 3
-    elif original_label == "Medicine":
-        example["label"] = 4  # 原标签 1 -> 新标签 4
-    elif original_label == "Biology":
-        example["label"] = 5  # 原标签 1 -> 新标签 4
+#     # 重新映射原始标签d
+#     if original_label == "Physics":
+#         example["label"] = 3  # 原标签 0 -> 新标签 3
+#     elif original_label == "Medicine":
+#         example["label"] = 4  # 原标签 1 -> 新标签 4
+#     elif original_label == "Biology":
+#         example["label"] = 5  # 原标签 1 -> 新标签 4
 
-    return example
+#     return example
 
 
-dataset = dataset.map(update_label)
+# dataset = dataset.map(update_label)
 # 加载第一个模型
 # fine_tuned_bert_model = AutoModelForSequenceClassification.from_pretrained(
 #     "/openbayes/home/ftg/results/train_full_imdb_on_agnews/checkpoint-4689"
 # )
 print(dataset)
 fine_tuned_bert_model = AutoModelForSequenceClassification.from_pretrained(
-    "results/_cache_huggingface_datasets_SciNews_3labels_01_18_13:51/lora"
+    "/root/ftg/results/full__cache_huggingface_datasets_ag_news_14labels_01_21_04:11/checkpoint-206087"
 )
 # fine_tuned_bert_model = AutoModelForSequenceClassification.from_pretrained(
 #     "/openbayes/home/ftg/results/agnews_checkpoint-22500"
