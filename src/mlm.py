@@ -25,7 +25,7 @@ from module.func import (
     extract_random_samples,
     parse_comma_separated,
 )
-from module.model import CustomBertForMaskedLM
+from module.BertModel import CustomBertForMaskedLM
 from pprint import pprint
 # set logger
 logging.basicConfig(

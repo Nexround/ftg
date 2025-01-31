@@ -14,7 +14,7 @@ from module.func import (
     convert_to_triplet_ig_top,
     parse_comma_separated,
 )
-from module.model import CustomBertForSequenceClassification
+from module.BertModel import CustomBertForSequenceClassification
 from pprint import pprint
 
 # set logger
