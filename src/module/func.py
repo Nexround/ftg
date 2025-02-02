@@ -312,6 +312,57 @@ def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
 
     return hooks  # 返回 hooks 以便后续管理和清理
 
+def unfreeze_ffn_qwen(model, trainable_neurons):
+    hooks = []
+
+    # 按层分组 trainable_neurons，减少 hook 数量
+
+    layer_to_neurons = defaultdict(list)
+    for layer, neuron_index in trainable_neurons:
+        layer_to_neurons[layer].append(neuron_index)
+
+    for layer, neuron_indices in layer_to_neurons.items():
+        # 获取当前层的中间层和输出层
+        # intermediate_dense = model.bert.encoder.layer[layer].mlp.gate_proj
+        output_dense = model.model.layers[layer].mlp.down_proj
+        output_dense.requires_grad = True
+        # 确保权重和偏置的 requires_grad 为 True
+        # intermediate_dense.weight.requires_grad = True
+        # intermediate_dense.bias.requires_grad = True
+        output_dense.weight.requires_grad = True 
+
+        # 注册单个钩子函数，针对输入权重的所有指定神经元
+        # def input_weight_hook(grad):
+        #     mask = torch.zeros_like(grad)
+        #     mask[neuron_indices, :] = 1  # 只允许指定神经元的梯度
+        #     return grad * mask
+
+        # hooks.append(intermediate_dense.weight.register_hook(input_weight_hook))
+
+        # 注册单个钩子函数，针对输出权重的所有指定神经元
+        def output_weight_hook(grad):
+            mask = torch.zeros_like(grad)
+            mask[:, neuron_indices] = 1  # 只允许指定神经元的梯度
+            return grad * mask
+
+        hooks.append(output_dense.weight.register_hook(output_weight_hook))
+
+        # 注册单个钩子函数，针对输入偏置的所有指定神经元
+        # def input_bias_hook(grad):
+        #     mask = torch.zeros_like(grad)
+        #     mask[neuron_indices] = 1  # 只允许指定神经元的梯度
+        #     return grad * mask
+
+        # hooks.append(intermediate_dense.bias.register_hook(input_bias_hook))
+
+        # 输出层偏置不需要区分神经元，保持全梯度
+        # def output_bias_hook(grad):
+        #     mask = torch.zeros_like(grad)
+        #     return grad * mask  # 不允许调整输出层bias
+
+        # hooks.append(output_dense.bias.register_hook(output_bias_hook))
+
+    return hooks  # 返回 hooks 以便后续管理和清理
 
 def compute_metrics(pred, method="weighted"):
     """

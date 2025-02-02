@@ -23,7 +23,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
             param.requires_grad = False
         for layer in range(self.config.num_hidden_layers):
             self.model.layers[layer].mlp.gate_proj.weight.requires_grad = True
-            self.model.layers[layer].mlp.down_proj.weight.requires_grad = True
+            # self.model.layers[layer].mlp.down_proj.weight.requires_grad = True
 
     def forward(self, target_token_idx, *args, **kwargs):
         """
@@ -249,4 +249,4 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         self._kwargs = None
         for hook in self._temporary_hooks:
             hook.remove()
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
