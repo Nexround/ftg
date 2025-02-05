@@ -512,13 +512,13 @@ train_qwen_reranker_target:
 	python train_qwen.py \
 	--dataset "/cache/huggingface/datasets/reranker_conversations_converted" \
 	--target_neurons_path "/root/ftg/target_neurons/random_RATIO10.json" \
-	--model "Qwen/Qwen2.5-0.5B-Instruct" \
+	--model "/root/.cache/modelscope/hub/Qwen/Qwen2.5-0.5B-Instruct" \
 	--output_dir "./results" \
 	--output_prefix "experiment_name" \
 	--batch_size 1 \
 	--num_train_epochs 1 \
 	--train_option target_neurons \
-	--learning_rate 1e-4 \
+	--learning_rate 1e-5 \
 
 train_qwen_reranker_lora:
 	python train_qwen.py \

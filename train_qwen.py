@@ -2,6 +2,8 @@ import time
 import argparse
 import json
 from enum import Enum
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 from functools import partial
 from transformers import (
@@ -10,6 +12,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
     DataCollatorForLanguageModeling,
+    DataCollatorWithPadding
 )
 from peft import LoraConfig, get_peft_model
 
@@ -22,7 +25,62 @@ from src.module.func import (
     parse_comma_separated,
 )
 
+from dataclasses import dataclass
+from typing import Any, Dict, List, Union
+import torch
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+from transformers import AdamW
 
+
+
+@dataclass
+class DataCollatorForSFT:
+    """
+    用于自回归模型 SFT 任务的 DataCollator 示例，要求：
+      - 输入数据已 tokenized，包含 "input_ids"、"attention_mask" 和 "labels"；
+      - 对剩余样本进行 batch padding，labels 单独使用 pad_sequence 进行 padding。
+
+    说明：
+      - 使用 tokenizer.pad 对已 tokenized 数据进行 padding，避免使用 __call__ 方法从而误认为输入为原始文本；
+      - labels 字段单独处理，padding 值为 label_pad_token_id（通常为 -100，以在 loss 计算时忽略）。
+    """
+    tokenizer: PreTrainedTokenizerBase
+    padding: Union[bool, str] = True      # True 表示动态 padding，也可以设置为 "longest" 或 "max_length"
+    max_length: int = None                # 可选：设置最大长度
+    pad_to_multiple_of: int = None        # 可选：填充至某个整数的倍数（有助于 GPU 加速）
+    label_pad_token_id: int = -100        # labels 的 padding token id
+    max_allowed_length: int = 8192        # 超过此长度的样本将被截断
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+
+        # 提取 labels 列表；假设每个样本中均包含 "labels"
+        labels = [feature["labels"] for feature in features] if "labels" in features[0] else None
+
+        # 剔除 labels 字段，传给 tokenizer.pad 进行输入字段的 padding
+        features_no_labels = [
+            {k: v for k, v in feature.items() if k != "labels"}
+            for feature in features
+        ]
+        
+        # 对预先 tokenized 的 features 使用 pad 进行 padding
+        batch = self.tokenizer.pad(
+            features_no_labels,
+            padding=self.padding,
+            max_length=self.max_length,
+            pad_to_multiple_of=self.pad_to_multiple_of,
+            return_tensors="pt",
+        )
+        
+        # 单独对 labels 进行 padding
+        if labels is not None:
+            batch_labels = torch.nn.utils.rnn.pad_sequence(
+                [torch.tensor(label, dtype=torch.long) for label in labels],
+                batch_first=True,
+                padding_value=self.label_pad_token_id,
+            )
+            batch["labels"] = batch_labels
+
+        return batch
 # 定义枚举类型
 class TrainOption(Enum):
     LORA = "lora"
@@ -34,6 +92,7 @@ class TrainOption(Enum):
 
 
 if __name__ == "__main__":
+    
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
     parser = argparse.ArgumentParser()
@@ -90,6 +149,7 @@ if __name__ == "__main__":
         args.model, cache_dir="/cache/huggingface/hub"
     )
     # tokenizer.pad_token = tokenizer.eos_token
+    data_collator = DataCollatorForSFT(tokenizer=tokenizer)
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
@@ -113,12 +173,13 @@ if __name__ == "__main__":
     #     {{- '<|im_start|>assistant\n' }}
     # {%- endif %}"""
 
-    def filter_long_examples(example):
-        return len(example["input_ids"]) <= 2048  # 仅保留长度 ≤ 512 的样本
+    # def filter_long_examples(example):
+    #     return len(example["input_ids"]) <= 2048  # 仅保留长度 ≤ 512 的样本
 
 
-    dataset = dataset.filter(filter_long_examples, num_proc=30)
+    # dataset = dataset.filter(filter_long_examples, num_proc=30)
     dataset = dataset["train"].shuffle(seed=42)
+    
 
     print(args.train_option)
     if args.train_option == "only_head":
@@ -214,17 +275,19 @@ if __name__ == "__main__":
         save_steps=1000,
         save_total_limit=2,  # 最多保存两个模型
         save_strategy="epoch",
-        fp16=True,
+        bf16=True,
         lr_scheduler_type="cosine",
         warmup_ratio=0.01,
-        gradient_accumulation_steps=1,
+        dataloader_num_workers=8,
     )
-
+    # 只传入 requires_grad 为 True 的参数
+    optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        # data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+        data_collator=data_collator,
+        optimizers=(optimizer,None)
     )
 
     # 开始训练
