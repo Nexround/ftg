@@ -7,34 +7,34 @@ model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-ds = load_dataset("/root/reranker_continuous_filt_max7_train")
+ds = load_dataset("lightblue/reranker_continuous_filt_max7_train")
 # ds = load_from_disk("/root/reranker_continuous_filt_max7_train/data")
 ds = ds.select_columns(["conversations"])
 
 print(ds)
-# 定义过滤函数：若文本token数量超过8192则过滤掉该样本
-def filter_by_length(example):
-    conv = example["conversations"]
-    # 转换消息格式（与转换函数中的逻辑一致）
-    messages = []
-    for msg in conv:
-        role = msg["from"]
-        content = msg["value"]
-        if role == "system":
-            messages.append({"role": "system", "content": content})
-        elif role == "human":
-            messages.append({"role": "user", "content": content})
-        elif role == "gpt":
-            messages.append({"role": "assistant", "content": content})
-    # 使用模型自带的模板生成格式化文本
-    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
-    # 对文本进行编码，注意不进行截断
-    tokenized = tokenizer(text, truncation=False)
-    return len(tokenized["input_ids"]) <= 8192
+# # 定义过滤函数：若文本token数量超过8192则过滤掉该样本
+# def filter_by_length(example):
+#     conv = example["conversations"]
+#     # 转换消息格式（与转换函数中的逻辑一致）
+#     messages = []
+#     for msg in conv:
+#         role = msg["from"]
+#         content = msg["value"]
+#         if role == "system":
+#             messages.append({"role": "system", "content": content})
+#         elif role == "human":
+#             messages.append({"role": "user", "content": content})
+#         elif role == "gpt":
+#             messages.append({"role": "assistant", "content": content})
+#     # 使用模型自带的模板生成格式化文本
+#     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+#     # 对文本进行编码，注意不进行截断
+#     tokenized = tokenizer(text, truncation=False)
+#     return len(tokenized["input_ids"]) <= 8192
 
-# 过滤掉长度超过8192 token 的样本
-ds = ds.filter(filter_by_length, num_proc=20)
-print(f"数据过滤后样本数：{len(ds['train'])}")
+# # 过滤掉长度超过8192 token 的样本
+# ds = ds.filter(filter_by_length, num_proc=20)
+# print(f"数据过滤后样本数：{len(ds['train'])}")
 
 def convert_format(batch):
     # 转换消息格式
@@ -113,7 +113,7 @@ def convert_format(batch):
 
 # 应用转换函数
 converted_dataset = ds.map(
-    convert_format, remove_columns=["conversations"], num_proc=20, batched=True, batch_size=2
+    convert_format, remove_columns=["conversations"], num_proc=20, batched=True, batch_size=40
 )
 print(converted_dataset)
 

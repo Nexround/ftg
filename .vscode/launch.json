@@ -161,7 +161,9 @@
                 "--result_file",
                 "lm_h4.json",
                 "--dataset",
-                "HuggingFaceH4/helpful-instructions"
+                "HuggingFaceH4/helpful-instructions",
+                "--retention_threshold",
+                "99"
             ],
         },
         {

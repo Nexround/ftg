@@ -181,6 +181,7 @@ def convert_to_triplet_ig_top(ig_list, RETENTION_THRESHOLD=99):
     # j：每个层中 FFN 中间层激活权重的索引（0 到 3071，共 3072 个中间层）
     # ig[i][j]：集成梯度值，即该位置的权重。
     ig_triplet = []
+    ig_list = [torch.tensor(value, dtype=torch.float32) for value in ig_list]
     ig = np.array(ig_list)  # 12, 3072
     # 计算前5%的阈值
     threshold = np.percentile(ig, RETENTION_THRESHOLD)

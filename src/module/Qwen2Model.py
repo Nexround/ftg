@@ -11,7 +11,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         self._partitioning_activations = []
         self._partitioning_step = []
         self._partitioning_last_hidden_state_last_pos = []
-        self._PARTITIONING_TIMES = 6
+        self._PARTITIONING_TIMES = 8
         self._partitioning_logits = []
         # self._partitioning_logits是last_hidden_state经过cls层的输出
         self._integrated_gradients = []
@@ -22,6 +22,9 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         for param in self.model.parameters():
             param.requires_grad = False
         for layer in range(self.config.num_hidden_layers):
+            # self.model.layers[layer].mlp.requires_grad = True
+            # self.model.layers[layer].mlp.requires_grad = True
+            # self.model.layers[layer].mlp.gate_proj.requires_grad = True
             self.model.layers[layer].mlp.gate_proj.weight.requires_grad = True
             # self.model.layers[layer].mlp.down_proj.weight.requires_grad = True
 
@@ -53,7 +56,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         # Register hooks on intermediate layers
         hooks = []
         for layer in self.model.layers:
-            hooks.append(layer.mlp.down_proj.register_forward_hook(hook_fn))
+            hooks.append(layer.mlp.gate_proj.register_forward_hook(hook_fn))
 
         # Forward pass
         outputs = super().forward(*args, **kwargs).logits[:, target_token_idx, :]
@@ -65,14 +68,19 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
 
     def forward_with_partitioning(self, target_token_idx):
         """
-        target_pos token idx
+        对模型进行前向传播，并在每一层对目标token的激活值进行分区处理。
+
+        Args:
+            target_token_idx (int): 目标token在输入序列中的位置索引。
+
+        Returns:
+            list: 包含每一层分区处理后logits的列表。
         """
         # 批量化处理提高性能
         batch_size = self._PARTITIONING_TIMES
-        # kwargs = [self._kwargs for _ in range(batch_size)]
 
-        input_ids = self._kwargs["input_ids"].repeat(batch_size, 1)
-        attention_mask = self._kwargs["attention_mask"].repeat(batch_size, 1)
+        input_ids = self._kwargs["input_ids"]
+        attention_mask = self._kwargs["attention_mask"]
         """
         找到对应token在每层的激活值，然后
         对每层的激活值进行间隔操作，并逐层记录
@@ -82,12 +90,12 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
                 target_vector, self._PARTITIONING_TIMES
             )
             self._partitioning_activations.append(partitioning)
-            self._partitioning_step.append(step.detach())
+            self._partitioning_step.append(step)
             # self._partitioning_activations.append(partitioning.detach().cpu())
             # self._partitioning_step.append(step.detach().cpu())
 
         """
-        
+        逐层处理每一层的激活值。
         """
         for layer_idx in range(self.config.num_hidden_layers):
             # for idx in range(self._PARTITIONING_TIMES):
@@ -97,20 +105,21 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
                 self._partitioning_activations[layer_idx],
             )
             self._temporary_hooks.append(hook)
-            outputs = self.model.forward(input_ids, attention_mask, **self._new_dict)
+            outputs = self.model.forward(input_ids.repeat(batch_size, 1), attention_mask.repeat(batch_size, 1), **self._new_dict)
             # outputs = super().forward(input_ids, attention_mask)
             # outputs = super().forward(*self._args, **self._kwargs)
-            self._partitioning_last_hidden_state_last_pos.append(
-                outputs.last_hidden_state[:, target_token_idx, :]
-            )  # logits不可使用detach，否则会导致梯度丢失
+            # self._partitioning_last_hidden_state_last_pos.append(
+            #     outputs.last_hidden_state[:, target_token_idx, :]
+            # )  # logits不可使用detach，否则会导致梯度丢失
             # self._partitioning_logits.append(
             #     outputs.logits
             # )  # logits不可使用detach，否则会导致梯度丢失
-            del outputs
+            
             # torch.cuda.empty_cache()
             self._partitioning_logits.append(
-                self.lm_head(self._partitioning_last_hidden_state_last_pos[layer_idx])
+                self.lm_head(outputs.last_hidden_state[:, target_token_idx, :])
             )  # 逐层地使用ffn激活值进行计算
+            del outputs
         return self._partitioning_logits
 
     def modify_ffn_activation(self, layer_idx, target_token_idx, new_activation):
@@ -129,16 +138,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
             raise ValueError("new_activation must be a torch.Tensor.")
 
         def hook_fn(module, input, output):
-            # Store original activations before modification
-            # self._original_activations.append(output)
 
-            # Ensure the shape matches
-            # batch_idx, seq_idx = (
-            #     target_position
-            #     if isinstance(target_position, tuple)
-            #     else (0, target_position)
-            # )
-            # 简易补丁
             if new_activation.shape != output[:, target_token_idx, :].shape:
                 raise ValueError(
                     f"Shape mismatch: Expected {output[:,target_token_idx,:].shape}, "
@@ -152,7 +152,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
             return output
 
         # Register the hook
-        hook = self.model.layers[layer_idx].mlp.down_proj.register_forward_hook(hook_fn)
+        hook = self.model.layers[layer_idx].mlp.gate_proj.register_forward_hook(hook_fn)
         """
         这个函数利用hook修改指定位置上的FFN层的激活值，并存储修改前的激活值。
         """
@@ -188,30 +188,24 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         )  # (step, ffn_size)
 
         # 返回生成的输入数据和每一步的增量。
-        return partitioning, step[0]
-
-    # def generate_partitioning(self, vector, times=20):
-    #     step = vector / times  # 直接计算步长
-    #     return step * torch.arange(times, device=vector.device).unsqueeze(
-    #         1
-    #     ), step[0]  # 生成时避免存储中间矩阵
+        return partitioning, step[0].detach().cpu()
 
     def calulate_integrated_gradients(self, target_label):
         for i in range(self.config.num_hidden_layers):
-            self._partitioning_activations[i].requires_grad_()
+            # self._partitioning_activations[i].requires_grad_()
             prob = F.softmax(self._partitioning_logits[i], dim=1)
             o = torch.unbind(prob[:, target_label])
             (gradient,) = torch.autograd.grad(
                 o, self._partitioning_activations[i], retain_graph=False
             )
-            grad_summed = gradient.sum(dim=0)  # (ffn_size)
+            grad_summed = gradient.sum(dim=0).cpu()  # (ffn_size)
             integrated_gradients_of_layer = (
                 grad_summed * self._partitioning_step[i]
             )  # (ffn_size)
             """
             在指定预测结果位置(MLM任务上最后预测单词)上,逐层计算integrated_gradients,integrated_gradients_of_layer意味着某层的ffn层逐神经元的integrated_gradients
             """
-            self._integrated_gradients.append(integrated_gradients_of_layer)
+            self._integrated_gradients.append(integrated_gradients_of_layer.cpu())
         return self._integrated_gradients
 
     @property

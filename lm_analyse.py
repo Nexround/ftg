@@ -9,7 +9,7 @@ import torch
 import numpy as np
 from datasets import load_dataset
 from tqdm import tqdm
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, BitsAndBytesConfig
 from src.module.func import (
     convert_to_triplet_ig_top,
     parse_comma_separated,
@@ -103,9 +103,19 @@ if __name__ == "__main__":
     # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
-    model = CustomQwen2ForCausalLM.from_pretrained(args.model_path).half()
-    # model = fine_tuned_bert_model
-    model.to(device)
+    # quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+
+    model = CustomQwen2ForCausalLM.from_pretrained(
+        args.model_path,
+        # quantization_config=quantization_config,
+        torch_dtype="auto",
+        attn_implementation="flash_attention_2",
+        device_map="auto"
+    )
+    # model.model.embed_tokens.to("cpu")
+    # model.lm_head.to("cpu")
+    # model = torch.compile(model)
+    print(model.get_memory_footprint())
 
     # data parallel
     if n_gpu > 1:
@@ -174,14 +184,15 @@ if __name__ == "__main__":
 
         model.forward_with_partitioning(target_token_idx=-1)
         ig_gold = model.calulate_integrated_gradients(target_label=predicted_class)
+
         for ig in ig_gold:
             # 为batch inference预留的for
-            ig = ig.cpu().detach()
             ig_dict["ig_gold"].append(ig)
 
         ig_dict["ig_gold"] = convert_to_triplet_ig_top(
             ig_dict["ig_gold"], args.retention_threshold
         )
+        record_list.append([ig_dict])
         # record running time
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")

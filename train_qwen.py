@@ -149,7 +149,7 @@ if __name__ == "__main__":
         args.model, cache_dir="/cache/huggingface/hub"
     )
     # tokenizer.pad_token = tokenizer.eos_token
-    data_collator = DataCollatorForSFT(tokenizer=tokenizer)
+    # data_collator = DataCollatorForSFT(tokenizer=tokenizer)
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
@@ -282,6 +282,8 @@ if __name__ == "__main__":
     )
     # 只传入 requires_grad 为 True 的参数
     optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
+    tokenizer.pad_token = tokenizer.eos_token
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     trainer = Trainer(
         model=model,
         args=training_args,
