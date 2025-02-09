@@ -70,7 +70,7 @@ lm_h4:
 	--model_path Qwen/Qwen2.5-0.5B-Instruct \
 	--output_dir ./results \
 	--max_seq_length 32768 \
-	--batch_size 8 \
+	--times 8 \
 	--result_file lm_h4.json \
 	--dataset HuggingFaceH4/helpful-instructions \
 	--num_sample 10000 \

@@ -60,7 +60,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--batch_size", default=16, type=int, help="Total batch size for cut."
+        "--times", default=10, type=int, help="Total batch size for cut."
     )
     parser.add_argument("--num_sample", default=10000, type=int)
 
@@ -110,8 +110,9 @@ if __name__ == "__main__":
         # quantization_config=quantization_config,
         torch_dtype="auto",
         attn_implementation="flash_attention_2",
-        device_map="auto"
+        device_map="auto",
     )
+    # model.gradient_checkpointing_enable() # 目前看来没什么用
     # model.model.embed_tokens.to("cpu")
     # model.lm_head.to("cpu")
     # model = torch.compile(model)
@@ -182,8 +183,8 @@ if __name__ == "__main__":
         # logits = outputs.logits
         predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
 
-        model.forward_with_partitioning(target_token_idx=-1)
-        ig_gold = model.calulate_integrated_gradients(target_label=predicted_class)
+        model.forward_with_partitioning(target_token_idx=-1, times=args.times)
+        ig_gold = model.calculate_integrated_gradients(target_label=predicted_class)
 
         for ig in ig_gold:
             # 为batch inference预留的for
@@ -196,7 +197,7 @@ if __name__ == "__main__":
         # record running time
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
-        # pprint(torch.cuda.memory_stats())
+        # pprint(torch.cuda.memory_stats()) #没什么用
         print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
 
         model.clean()
