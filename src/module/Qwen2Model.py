@@ -1,6 +1,8 @@
 from transformers import Qwen2ForCausalLM
 import torch
 import torch.nn.functional as F
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 
 class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
     def __init__(self, config):
@@ -14,12 +16,12 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         self._args = None
         self._kwargs = None
         self._new_dict = None
-        
+        # self._memory_net = getattr(self, "mlp.down_proj")
         # 冻结所有参数，仅保留需要的梯度
         for param in self.model.parameters():
             param.requires_grad = False
         for layer in self.model.layers:
-            layer.mlp.gate_proj.weight.requires_grad = True
+            layer.mlp.down_proj.weight.requires_grad = True
 
     def forward(self, target_token_idx, *args, **kwargs):
         self._args = args
@@ -33,7 +35,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
 
         hooks = []
         for layer in self.model.layers:
-            hooks.append(layer.mlp.gate_proj.register_forward_hook(hook_fn))
+            hooks.append(layer.mlp.down_proj.register_forward_hook(hook_fn))
         
         outputs = super().forward(*args, **kwargs).logits[:, target_token_idx, :]
         
@@ -44,12 +46,12 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
 
     def forward_with_partitioning(self, target_token_idx, times):
         # 生成所有层的分区激活
-        self._partitioning_activations = []
-        self._partitioning_step = []
-        for vec in self._intermediate_activations:
-            partitioning, step = self.generate_partitioning(vec, times)
-            self._partitioning_activations.append(partitioning)
-            self._partitioning_step.append(step)
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self.generate_partitioning, vec, times) for vec in self._intermediate_activations]
+            for future in concurrent.futures.as_completed(futures):
+                partitioning, step = future.result()
+                self._partitioning_activations.append(partitioning)
+                self._partitioning_step.append(step)
 
         # 准备批量输入（总样本数 = 层数 * 分区次数）
         num_layers = self.config.num_hidden_layers
@@ -62,7 +64,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         for layer_idx in range(num_layers):
             layer_activation = self._partitioning_activations[layer_idx]
             hook = self._create_batch_hook(
-                layer_idx, target_token_idx, layer_activation, times,target= self.model.layers[layer_idx].mlp.gate_proj
+                layer_idx, target_token_idx, layer_activation, times,target= self.model.layers[layer_idx].mlp.down_proj
             )
             hooks.append(hook)
 
@@ -99,21 +101,28 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
         partitioning = torch.cat([baseline + step*i for i in range(times)], dim=0)
         return partitioning, step[0].detach().cpu()
 
+    def _compute_ig_for_layer(self, i, target_label):
+        prob = F.softmax(self._partitioning_logits[i], dim=1)
+        target_label_logits = prob[:, target_label]
+        (gradient,) = torch.autograd.grad(
+            target_label_logits,
+            self._partitioning_activations[i],
+            grad_outputs=torch.ones_like(target_label_logits),
+            retain_graph=True
+        )
+        gradient = gradient.detach().cpu()
+        return gradient.sum(dim=0) * self._partitioning_step[i]
+
     def calculate_integrated_gradients(self, target_label):
-        self._integrated_gradients = []
-        for i in range(self.config.num_hidden_layers):
-            prob = F.softmax(self._partitioning_logits[i], dim=1)
-            o = prob[:, target_label]
-            (gradient,) = torch.autograd.grad(
-                o, 
-                self._partitioning_activations[i], 
-                grad_outputs=torch.ones_like(o),
-                retain_graph=True
-            )
-            ig = (gradient.sum(dim=0).cpu() * self._partitioning_step[i]).cpu()
-            self._integrated_gradients.append(ig)
+        self._integrated_gradients = [None] * self.config.num_hidden_layers
+        with ThreadPoolExecutor() as executor:
+            futures = {executor.submit(self._compute_ig_for_layer, i, target_label): i 
+                    for i in range(self.config.num_hidden_layers)}
+            for future in concurrent.futures.as_completed(futures):
+                i = futures[future]
+                self._integrated_gradients[i] = future.result()
         return self._integrated_gradients
-    
+
     def clean(self):
         attrs = [
             '_intermediate_activations', '_partitioning_activations',

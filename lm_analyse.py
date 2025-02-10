@@ -178,7 +178,7 @@ if __name__ == "__main__":
         logits = model.forward(
             **(model_inputs.data),
             target_token_idx=-1,
-            use_cache=False,
+            use_cache=True,
         )
         # logits = outputs.logits
         predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
@@ -201,7 +201,6 @@ if __name__ == "__main__":
         print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
 
         model.clean()
-        model.zero_grad()
 
     with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:
         fw.write(record_list)
