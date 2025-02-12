@@ -75,6 +75,17 @@ lm_h4:
 	--dataset HuggingFaceH4/helpful-instructions \
 	--num_sample 10000 \
 	--retention_threshold 99 
+	
+lm_trivia_qa:
+	python lm_analyse.py \
+	--model_path Qwen/Qwen2.5-0.5B-Instruct \
+	--output_dir ./results \
+	--max_seq_length 32768 \
+	--times 7 \
+	--result_file lm_trivia_qa.json \
+	--dataset mandarjoshi/trivia_qa,rc.nocontext \
+	--num_sample 10000 \
+	--retention_threshold 99 
 
 token_cls_agnews:
 	python ./src/token_cls.py \

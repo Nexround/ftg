@@ -132,51 +132,56 @@ if __name__ == "__main__":
     dataset = load_dataset(
         *args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets"
     )
-
-    # def tokenize_function(examples):
-    #     # print(examples["instruction"])
-    #     messages = [
-    #         {
-    #             "role": "system",
-    #             "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.",
-    #         },
-    #         {"role": "user", "content": examples["instruction"]},
-    #     ]
-    #     text = tokenizer.apply_chat_template(
-    #         messages, tokenize=False, add_generation_prompt=True
-    #     )
-    #     return tokenizer(text, return_tensors="pt")
-
-    dataset = dataset["train"].shuffle(seed=42).select(range(args.num_sample))
-    # tokenized_train = dataset.map(tokenize_function, batched=True, num_proc=32)
-    # evaluate args.debug bags for each relation
-
-    record_list = []
-    for item in tqdm(dataset):
-        # record running time
-        prompt = item["instruction"]
-        tic = time.perf_counter()
+    dataset = dataset["train"].select_columns(["question"])
+    def tokenize_function(examples):
         messages = [
             {
-                "role": "system",
-                "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.",
-            },
-            {"role": "user", "content": prompt},
+                "role": "user",
+                "content": f"Answer these questions, your answer should be as simple as possible, start your answer with the prompt 'The answer is '.\nQ: {examples["question"]}?",
+            }
         ]
         text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
+
         model_inputs = tokenizer([text], return_tensors="pt")
-        # model_input = model_input.to(model.device)
+        return model_inputs
+
+    dataset = dataset.shuffle(seed=42).select(range(args.num_sample))
+    dataset = dataset.map(tokenize_function, remove_columns=["question"], batched=False, num_proc=20)
+    # evaluate args.debug bags for each relation
+
+    record_list = []
+    for batch in tqdm(dataset):
+        batch["input_ids"].to(device)
+        batch["attention_mask"].to(device)
+        # record running time
+        # question = item["question"]
+        tic = time.perf_counter()
+        # messages = [
+        #     # {
+        #     #     "role": "system",
+        #     #     "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.",
+        #     # },
+        #     {
+        #         "role": "user",
+        #         "content": f"Answer these questions, your answer should be as simple as possible, start your answer with the prompt 'The answer is '.\nQ: {question}?",
+        #     },
+        # ]
+        # text = tokenizer.apply_chat_template(
+        #     messages, tokenize=False, add_generation_prompt=True
+        # )
+        # model_inputs = tokenizer([text], return_tensors="pt")
+        # model_inputs = model_inputs.to(model.device)
         ig_dict = {"ig_gold": []}
-        end_pos = len(model_inputs.data["input_ids"][0]) - 1
-        if end_pos > 100:
-            continue
-        model_inputs.to(model.device)
-        print(end_pos)
+        # end_pos = len(model_inputs["input_ids"][0]) - 1
+        # if end_pos > 100:
+        #     continue
+        # # model_inputs.to(model.device)
+        # print(end_pos)
         # original pred prob
         logits = model.forward(
-            **(model_inputs.data),
+            **(batch),
             target_token_idx=-1,
             use_cache=True,
         )
