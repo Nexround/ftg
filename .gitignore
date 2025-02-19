@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 logs/
-target_neurons/
 # C extensions
 *.so
 
