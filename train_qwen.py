@@ -3,7 +3,7 @@ import argparse
 import json
 from enum import Enum
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 from functools import partial
 from transformers import (
@@ -81,7 +81,159 @@ class DataCollatorForSFT:
             batch["labels"] = batch_labels
 
         return batch
-# 定义枚举类型
+    
+def pad_without_fast_tokenizer_warning(tokenizer, *pad_args, **pad_kwargs):
+    """
+    Pads without triggering the warning about how using the pad function is sub-optimal when using a fast tokenizer.
+    """
+
+    # To avoid errors when using Feature extractors
+    if not hasattr(tokenizer, "deprecation_warnings"):
+        return tokenizer.pad(*pad_args, **pad_kwargs)
+
+    # Save the state of the warning, then disable it
+    warning_state = tokenizer.deprecation_warnings.get("Asking-to-pad-a-fast-tokenizer", False)
+    tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
+
+    try:
+        padded = tokenizer.pad(*pad_args, **pad_kwargs)
+    finally:
+        # Restore the state of the warning.
+        tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = warning_state
+
+    return padded
+
+class DataCollatorForAutoRegressiveLM:
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+        
+    def convert_format(self, batch):
+        # 转换消息格式
+        batch_converted_messages = []
+        for conv in batch:
+            converted = []
+            for msg in conv:
+                role = msg["from"]
+                content = msg["value"]
+                if role == "system":
+                    converted.append({"role": "system", "content": content})
+                elif role == "human":
+                    converted.append({"role": "user", "content": content})
+                elif role == "gpt":
+                    converted.append({"role": "assistant", "content": content})
+            batch_converted_messages.append(converted)
+        
+        # 生成格式化文本
+        texts = [
+            tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+            for messages in batch_converted_messages
+        ]
+        
+        # 批量编码文本
+        return tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
+            return_attention_mask=True
+        )
+        
+    def __call__(self, examples):
+        # 提取输入和标签
+        input_ids = [item['input_ids'] for item in examples]
+        attention_mask = [item['attention_mask'] for item in examples]
+
+        # 将输入和标签转换为张量
+        input_ids = torch.tensor(input_ids, dtype=torch.long)
+        attention_mask = torch.tensor(attention_mask, dtype=torch.long)
+        batch = pad_without_fast_tokenizer_warning(
+            self.tokenizer, examples, return_tensors="pt", pad_to_multiple_of=self.pad_to_multiple_of
+        )
+        # 标签是输入向右移动一位
+        labels = input_ids[:, 1:].clone()  # 去掉第一个 token
+        input_ids = input_ids[:, :-1]      # 去掉最后一个 token
+        attention_mask = attention_mask[:, :-1]  # 调整 attention mask
+
+        # 返回模型输入
+        return {
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'labels': labels,
+        }
+def data_collator_t(batch):
+    # 转换消息格式
+    batch_converted_messages = []
+    for conv in batch:
+        converted = []
+        for msg in conv["conversations"]:
+            role = msg["from"]
+            content = msg["value"]
+            if role == "system":
+                converted.append({"role": "system", "content": content})
+            elif role == "human":
+                converted.append({"role": "user", "content": content})
+            elif role == "gpt":
+                converted.append({"role": "assistant", "content": content})
+        batch_converted_messages.append(converted)
+    
+    # 生成格式化文本
+    texts = [
+        tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+        for messages in batch_converted_messages
+    ]
+    print(texts)
+    
+    # 批量编码文本
+    model_inputs = tokenizer(
+        texts,
+        padding=True,
+        truncation=True,
+        return_tensors="pt",
+        return_attention_mask=True
+    )
+    input_ids = model_inputs["input_ids"]
+    attention_mask = model_inputs["attention_mask"]
+    batch_size, max_seq_len = input_ids.shape
+    
+    # 生成labels
+    all_labels = []
+    for i in range(batch_size):
+        # 获取当前样本的最后一条assistant消息
+        messages = batch_converted_messages[i]
+        last_msg = messages[-1]
+        assert last_msg["role"] == "assistant", "Last message must be from assistant"
+        
+        # 生成labels文本并编码
+        assistant_content = last_msg["content"]
+        labels_text = assistant_content + tokenizer.eos_token + "\n"
+        labels_ids = tokenizer(
+            labels_text,
+            add_special_tokens=False,
+            truncation=True,
+            max_length=max_seq_len  # 防止溢出
+        ).input_ids
+        
+        # 计算有效内容长度（排除padding）
+        original_length = attention_mask[i].sum().item()
+        
+        # 确定标签起始位置
+        start_pos = original_length - len(labels_ids)
+        if start_pos < 0:
+            # 截断过长的labels_ids
+            labels_ids = labels_ids[-original_length:]
+            start_pos = 0
+        
+        # 创建并填充labels张量
+        labels = torch.full((max_seq_len,), -100, dtype=torch.long)
+        end_pos = start_pos + len(labels_ids)
+        labels[start_pos:end_pos] = torch.tensor(labels_ids)
+        all_labels.append(labels)
+    
+    return {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": torch.stack(all_labels),
+    }        
 class TrainOption(Enum):
     LORA = "lora"
     FFN = "ffn"
@@ -143,8 +295,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # dataset = load_dataset(*args.dataset, cache_dir="/cache/huggingface/datasets")
-    dataset = load_from_disk(*args.dataset)
+    dataset = load_dataset(*args.dataset, cache_dir="/cache/huggingface/datasets")
+    dataset = dataset.select_columns(["conversations"])
+    # dataset = load_from_disk(*args.dataset)
     tokenizer = AutoTokenizer.from_pretrained(
         args.model, cache_dir="/cache/huggingface/hub"
     )
@@ -279,16 +432,17 @@ if __name__ == "__main__":
         lr_scheduler_type="cosine",
         warmup_ratio=0.01,
         dataloader_num_workers=8,
+        remove_unused_columns=False
     )
     # 只传入 requires_grad 为 True 的参数
     optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
     tokenizer.pad_token = tokenizer.eos_token
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    # data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        data_collator=data_collator,
+        data_collator=data_collator_t,
         optimizers=(optimizer,None)
     )
 

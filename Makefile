@@ -521,8 +521,8 @@ train_agnews_14_full_roberta:
 
 train_qwen_reranker_target:
 	python train_qwen.py \
-	--dataset "/cache/huggingface/datasets/reranker_conversations_converted" \
-	--target_neurons_path "/root/ftg/target_neurons/random_RATIO10.json" \
+	--dataset "lightblue/reranker_continuous_filt_max7_train" \
+	--target_neurons_path "target_neurons/random_RATIO10.json" \
 	--model "/root/.cache/modelscope/hub/Qwen/Qwen2.5-0.5B-Instruct" \
 	--output_dir "./results" \
 	--output_prefix "experiment_name" \
