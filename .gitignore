@@ -5,7 +5,7 @@ __pycache__/
 logs/
 # C extensions
 *.so
-
+elasticsearch*
 # Distribution / packaging
 .Python
 build/
