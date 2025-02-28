@@ -396,7 +396,7 @@ if __name__ == "__main__":
         lora_config = LoraConfig(
             r=args.lora_rank,
             lora_alpha=args.lora_alpha,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+            target_modules=["down_proj"],
             lora_dropout=0.1,
             bias="none",
         )

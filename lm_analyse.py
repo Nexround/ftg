@@ -9,7 +9,7 @@ import torch
 import numpy as np
 from datasets import load_dataset
 from tqdm import tqdm
-from transformers import AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoTokenizer
 from src.module.func import (
     convert_to_triplet_ig_top,
     parse_comma_separated,
@@ -108,8 +108,9 @@ if __name__ == "__main__":
     model = CustomQwen2ForCausalLM.from_pretrained(
         args.model_path,
         # quantization_config=quantization_config,
-        torch_dtype="auto",
-        attn_implementation="flash_attention_2",
+        # torch_dtype="auto",
+        torch_dtype=torch.bfloat16,
+        # attn_implementation="flash_attention_2",
         device_map="auto",
     )
     # model.gradient_checkpointing_enable() # 目前看来没什么用
@@ -132,7 +133,21 @@ if __name__ == "__main__":
     dataset = load_dataset(
         *args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets"
     )
-    dataset = dataset["train"].select_columns(["question"])
+    # dataset = dataset["train"].select_columns(["question"])
+    
+    def tokenize_function_for_mmlu(examples):
+        question = examples["question"]
+        choices = examples["choices"]
+        answer = examples["answer"]
+        subject = examples["subject"]
+        
+        formatted_string = f'There is a single choice question about {subject.replace("_", " ")}. Answer the question by replying A, B, C or D.'
+        for i, choice in enumerate(choices):
+            formatted_string += f'{chr(65 + i)}. {choice}\n'
+        formatted_string += f'Answer: {answer}\n'
+        
+        return formatted_string
+    
     def tokenize_function(examples):
         messages = [
             {
@@ -147,7 +162,9 @@ if __name__ == "__main__":
         model_inputs = tokenizer([text], return_tensors="pt")
         return model_inputs
 
-    dataset = dataset.shuffle(seed=42).select(range(args.num_sample))
+    dataset = dataset.shuffle(seed=42)
+    # dataset = dataset.shuffle(seed=42).select(range(args.num_sample))
+    # dataset = dataset.map(tokenize_function, remove_columns=["question"], batched=False, num_proc=20)
     dataset = dataset.map(tokenize_function, remove_columns=["question"], batched=False, num_proc=20)
     # evaluate args.debug bags for each relation
 
@@ -203,7 +220,7 @@ if __name__ == "__main__":
         toc = time.perf_counter()
         print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
         # pprint(torch.cuda.memory_stats()) #没什么用
-        print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
+        # print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
 
         model.clean()
 

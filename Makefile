@@ -541,6 +541,8 @@ train_qwen_reranker_lora:
 	--num_train_epochs 1 \
 	--train_option lora \
 	--learning_rate 1e-4 \
+	--lora_rank 8 \
+	--lora_alpha 16
 
 train_qwen_reranker_full:
 	python train_qwen.py \
