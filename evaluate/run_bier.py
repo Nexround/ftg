@@ -73,7 +73,7 @@ import numpy as np
 
 class LBCrossEncoder:
     def __init__(self, model_path: str, **kwargs):
-        self.llm = LLM(model=model_path, gpu_memory_utilization=0.3)
+        self.llm = LLM(model=model_path, gpu_memory_utilization=1)
         self.sampling_params = SamplingParams(temperature=0.0, logprobs=14, max_tokens=1)
         self.tok = self.llm.llm_engine.tokenizer.tokenizer
         self.idx_tokens = [self.tok.encode(str(i))[0] for i in range(1, 8)]
@@ -119,10 +119,50 @@ class AlibabaCrossEncoder:
                 inputs = self.tokenizer(sentences[i:i+batch_size], padding=True, truncation=True, return_tensors='pt', max_length=512).to(torch.device("cuda"))
                 scores.extend(self.model(**inputs, return_dict=True).logits.view(-1, ).cpu().numpy().tolist())
         return scores
-from multiprocessing import Pool
 
 dataset_names = ['arguana', 'dbpedia-entity', 'fiqa', 'nfcorpus', 'scidocs', 'scifact', 'trec-covid-v2', 'vihealthqa', 'webis-touche2020']
 
-with Pool(len(dataset_names)) as p:
-    print(dataset_names)
-    p.map(prep_bier_data, dataset_names)
+lightbl_ce, lightbl_name = LBCrossEncoder("/cache/models/lora_r1a2_reranker_0303/lora"), "lightblue/lora_reranker"
+
+
+models = [
+    # (flagemb_ce, flagemb_name),
+    (lightbl_ce, lightbl_name),
+    # (sentemb_ce, sentemb_name),
+    # (alibaba_ce, alibaba_name)
+]
+import pandas as pd
+import time
+
+dataset_names = [
+    'arguana',
+    'dbpedia-entity',
+    'fiqa',
+    'nfcorpus',
+    'scidocs', 'scifact', 'trec-covid-v2', 'vihealthqa', 'webis-touche2020'
+    ]
+
+for dataset_name in dataset_names:
+    print(dataset_name)
+
+    corpus, queries, qrels = prep_bier_data(dataset_name)
+
+    # Select first 250 queries, sorted by query key, to save computation time
+    queries = {x: queries[x] for x in sorted(queries.keys())[:250]}
+    results, retriever = get_bm_25_results_retriever(dataset_name, corpus, queries)
+
+    for cross_encoder_model, model_name in models:
+        print(model_name)
+
+        t0 = time.time()
+        ndcg, _map, recall, precision = get_cross_encoder_results(cross_encoder_model, corpus, queries, qrels, results, retriever)
+        time_elapsed = time.time() - t0
+
+        save_dir = f"./bier_results/" + model_name.replace("/", "__")
+
+        save_path = f"{save_dir}/" + dataset_name.replace("/", "__") + ".parquet"
+
+        pd.DataFrame(
+            dict(**ndcg, **_map, **recall, **precision, time=time_elapsed),
+            index=[[dataset_name, model_name]]
+        ).to_parquet(save_path)

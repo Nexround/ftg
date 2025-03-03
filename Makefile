@@ -532,8 +532,8 @@ train_qwen_reranker_target:
 	--learning_rate 1e-5 \
 
 train_qwen_reranker_lora:
-	python train_qwen.py \
-	--dataset "/cache/huggingface/datasets/reranker_conversations_converted" \
+	accelerate launch train_qwen.py \
+	--dataset "../reranker_continuous_filt_max7_train" \
 	--model "Qwen/Qwen2.5-0.5B-Instruct" \
 	--output_dir "./results" \
 	--output_prefix "experiment_name" \

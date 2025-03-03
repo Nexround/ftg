@@ -18,6 +18,18 @@ qwen2.5-0.5B 总参数494032768，24层tranformers块，隐藏层4864，共计48
 | **vihealthqa**     | <span style="color:green">+6.03</span>     | <span style="color:green">+7.91</span>     | <span style="color:green">+6.62</span>     | <span style="color:green">+5.66</span>     | <span style="color:green">+5.52</span>     |
 | **webis-touche2020**| <span style="color:green">+2.82</span>    | <span style="color:red">-7.41</span>       | <span style="color:red">-4.03</span>       | <span style="color:green">+6.05</span>     | <span style="color:green">+2.08</span>     |		
 
+| 数据集             | MAP@1      | MAP@3       | MAP@5       | MAP@10       | MAP@100 (%)       |
+|----------------------|----------|----------|----------|----------|----------|
+| arguana              | <span style="color:green">+3.08%</span> | <span style="color:green">+9.58%</span> | <span style="color:green">+5.89%</span> | <span style="color:green">+5.61%</span> | <span style="color:green">+5.14%</span> |
+| dbpedia-entity       | <span style="color:green">+16.97%</span> | <span style="color:green">+8.56%</span> | <span style="color:green">+6.14%</span> | <span style="color:green">+6.59%</span> | <span style="color:green">+5.37%</span> |
+| fiqa                 | <span style="color:green">+13.57%</span> | <span style="color:green">+11.59%</span> | <span style="color:green">+10.25%</span> | <span style="color:green">+10.28%</span> | <span style="color:green">+9.53%</span> |
+| nfcorpus             | <span style="color:green">+1.05%</span> | <span style="color:green">+2.15%</span> | <span style="color:green">+1.98%</span> | <span style="color:green">+1.56%</span> | <span style="color:green">+0.60%</span> |
+| scidocs              | <span style="color:green">+18.79%</span> | <span style="color:green">+16.80%</span> | <span style="color:green">+5.80%</span> | <span style="color:green">+7.03%</span> | <span style="color:green">+5.74%</span> |
+| scifact              | <span style="color:red">-5.61%</span> | <span style="color:red">-0.87%</span> | <span style="color:red">-0.98%</span> | <span style="color:red">-1.81%</span> | <span style="color:red">-1.70%</span> |
+| trec-covid-v2        | <span style="color:green">+1.45%</span> | <span style="color:green">+0.37%</span> | <span style="color:green">+4.57%</span> | <span style="color:green">+3.87%</span> | <span style="color:green">+1.18%</span> |
+| vihealthqa           | <span style="color:green">+1.01%</span> | <span style="color:green">+1.83%</span> | <span style="color:green">+0.89%</span> | <span style="color:green">+0.93%</span> | <span style="color:green">+1.07%</span> |
+| webis-touche2020     | <span style="color:green">+17.15%</span> | <span style="color:green">+2.50%</span> | <span style="color:green">+0.98%</span> | <span style="color:green">+3.82%</span> | <span style="color:green">+1.72%</span> |
+
 ## Qwen2.5-0.5B-Instruct的评测结果
 | dataset | version | metric | mode | Qwen2.5-0.5B-Instruct_hf |
 |----- | ----- | ----- | ----- | -----|
