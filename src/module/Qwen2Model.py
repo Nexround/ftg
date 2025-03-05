@@ -38,7 +38,7 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
             hooks.append(layer.mlp.down_proj.register_forward_hook(hook_fn))
         
         outputs = super().forward(*args, **kwargs).logits[:, target_token_idx, :]
-        
+        # 只返回指定位置的logits
         for hook in hooks:
             hook.remove()
         

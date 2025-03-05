@@ -200,7 +200,6 @@ def data_collator_t(batch):
         )
         for messages in batch_converted_messages
     ]
-    print(texts)
 
     # 批量编码文本
     model_inputs = tokenizer(
@@ -294,6 +293,12 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
+        "--ds_config",
+        default=None,
+        type=str,
+        required=False,
+    )
+    parser.add_argument(
         "--output_prefix",
         default=None,
         type=str,
@@ -384,18 +389,12 @@ if __name__ == "__main__":
         print("=== Training ffn ===")
         print("====================")
 
-        for param in model.bert.parameters():
+        for param in model.model.parameters():
             param.requires_grad = False
-        for param in model.classifier.parameters():
+        for param in model.lm_head.parameters():
             param.requires_grad = False
-        for layer in model.bert.encoder.layer:
-            # 获取当前层的中间层和输出层
-            intermediate_dense = layer.intermediate.dense
-            output_dense = layer.output.dense
-            intermediate_dense.weight.requires_grad = True
-            intermediate_dense.bias.requires_grad = True
-            output_dense.weight.requires_grad = True
-            output_dense.bias.requires_grad = True
+        for layer in model.model.layers:
+            layer.mlp.down_proj.weight.requires_grad = True
 
     elif args.train_option == "full":
         print("=====================")
@@ -435,7 +434,7 @@ if __name__ == "__main__":
 
     f_dataset = args.dataset[0].replace("/", "_")
     output_dir = f"{args.output_dir}/{args.train_option}_{f_dataset}_{time.strftime('%m_%d_%H:%M')}"
-
+    # model.config.use_cache = False
     training_args = TrainingArguments(
         output_dir=output_dir,  # 保存模型的路径
         learning_rate=args.learning_rate,  # 学习率
@@ -452,7 +451,8 @@ if __name__ == "__main__":
         warmup_ratio=0.01,
         dataloader_num_workers=8,
         remove_unused_columns=False,
-        deepspeed="/openbayes/home/ftg/train_config/ds_config.json"
+        deepspeed=args.ds_config,
+        # gradient_checkpointing=True,
     )
     # 只传入 requires_grad 为 True 的参数
     optimizer = AdamW(

@@ -544,6 +544,19 @@ train_qwen_reranker_lora:
 	--lora_rank 8 \
 	--lora_alpha 16
 
+train_qwen_reranker_ffn:
+	accelerate launch train_qwen.py \
+	--dataset "lightblue/reranker_continuous_filt_max7_train" \
+	--model "Qwen/Qwen2.5-0.5B-Instruct" \
+	--output_dir "./results" \
+	--output_prefix "experiment_name" \
+	--batch_size 1 \
+	--num_train_epochs 1 \
+	--train_option ffn \
+	--learning_rate 1e-5 \
+	--ds_config train_config/ds_config.json
+
+
 train_qwen_reranker_full:
 	python train_qwen.py \
 	--dataset "/cache/huggingface/datasets/reranker_conversations_converted" \

@@ -24,7 +24,65 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
-
+mmlu_all_sets = [
+    "college_biology",
+    "college_chemistry",
+    "college_computer_science",
+    "college_mathematics",
+    "college_physics",
+    "electrical_engineering",
+    "astronomy",
+    "anatomy",
+    "abstract_algebra",
+    "machine_learning",
+    "clinical_knowledge",
+    "global_facts",
+    "management",
+    "nutrition",
+    "marketing",
+    "professional_accounting",
+    "high_school_geography",
+    "international_law",
+    "moral_scenarios",
+    "computer_security",
+    "high_school_microeconomics",
+    "professional_law",
+    "medical_genetics",
+    "professional_psychology",
+    "jurisprudence",
+    "world_religions",
+    "philosophy",
+    "virology",
+    "high_school_chemistry",
+    "public_relations",
+    "high_school_macroeconomics",
+    "human_sexuality",
+    "elementary_mathematics",
+    "high_school_physics",
+    "high_school_computer_science",
+    "high_school_european_history",
+    "business_ethics",
+    "moral_disputes",
+    "high_school_statistics",
+    "miscellaneous",
+    "formal_logic",
+    "high_school_government_and_politics",
+    "prehistory",
+    "security_studies",
+    "high_school_biology",
+    "logical_fallacies",
+    "high_school_world_history",
+    "professional_medicine",
+    "high_school_mathematics",
+    "college_medicine",
+    "high_school_us_history",
+    "sociology",
+    "econometrics",
+    "high_school_psychology",
+    "human_aging",
+    "us_foreign_policy",
+    "conceptual_physics",
+]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -97,14 +155,10 @@ if __name__ == "__main__":
 
     # save args
     os.makedirs(args.output_dir, exist_ok=True)
-    # init tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-    # , do_lower_case=args.do_lower_case
-    # Load pre-trained BERT
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
     # quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-
+    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     model = CustomQwen2ForCausalLM.from_pretrained(
         args.model_path,
         # quantization_config=quantization_config,
@@ -117,7 +171,7 @@ if __name__ == "__main__":
     # model.model.embed_tokens.to("cpu")
     # model.lm_head.to("cpu")
     # model = torch.compile(model)
-    print(model.get_memory_footprint())
+    # print(model.get_memory_footprint())
 
     # data parallel
     if n_gpu > 1:
@@ -129,10 +183,6 @@ if __name__ == "__main__":
         return param_size / 1024**2  # 转换为 MB
 
     print(f"Model Weights Memory: {get_model_size(model):.2f} MB")
-
-    dataset = load_dataset(
-        *args.dataset, trust_remote_code=True, cache_dir="/cache/huggingface/datasets"
-    )
 
     def build_conversation(subset, train_samples, test_sample):
         conversation = []
@@ -178,83 +228,54 @@ if __name__ == "__main__":
 
         return conversation
 
-    def evaluate_subset(subset):
-        dataset = load_dataset("cais/mmlu", subset, cache_dir="/cache/huggingface/datasets")
-        test_data = dataset["test"]
+
+    record_list = []
+    for subset in mmlu_all_sets:
+        dataset = load_dataset("cais/mmlu", subset)
+        test_dataset = dataset["test"]
         few_shot_samples = dataset["dev"]
-
-        correct = 0
-        total = len(test_data)
-
-        for test_sample in tqdm(test_data, desc=f"Evaluating {subset}"):
+        for test_sample in tqdm(test_dataset, desc=f"Evaluating {subset}"):
 
             # 构建对话历史
             conversation = build_conversation(subset, few_shot_samples, test_sample)
+            inputs = tokenizer.apply_chat_template(
+                conversation,
+                add_generation_prompt=True,
+                return_tensors="pt",
+                return_dict=True, # 返回input_ids和attention_mask
+            ).to(device)
 
-            # 生成模型响应
-            prediction = generate_response(conversation)
+            # record running time
+            tic = time.perf_counter()
 
-            # 检查prediction是否在ABCD中
-            # if prediction not in {"A", "B", "C", "D"}:
-            #     raise ValueError(f"Invalid prediction: {prediction}")
+            ig_dict = {"ig_gold": []}
 
-            # 验证答案
-            if prediction == (answer := f"{chr(65+test_sample["answer"])}"):
-                correct += 1
+            logits = model.forward(
+                **(inputs),
+                target_token_idx=-1,
+                use_cache=True,
+            )
+            # logits = outputs.logits
+            predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
 
-        accuracy = correct / total
-        return accuracy
+            model.forward_with_partitioning(target_token_idx=-1, times=args.times)
+            ig_gold = model.calculate_integrated_gradients(target_label=predicted_class)
 
-    input_ids = tokenizer.apply_chat_template(
-        inputs,
-        add_generation_prompt=True,
-        return_tensors="pt",
-        # tokenize=False
-    ).to(DEVICE)
-    # model_input_ids = tokenizer([input_ids], return_tensors="pt").to(DEVICE)
-    # 生成回答
-    generated_ids = model.generate(
-        input_ids,
-        max_new_tokens=10,
-    )
-    dataset = load_dataset("cais/mmlu", subset, cache_dir="/cache/huggingface/datasets")
-    record_list = []
-    for batch in tqdm(dataset):
-        batch["input_ids"].to(device)
-        batch["attention_mask"].to(device)
-        # record running time
-        # question = item["question"]
-        tic = time.perf_counter()
+            for ig in ig_gold:
+                # 为batch inference预留的for
+                ig_dict["ig_gold"].append(ig)
 
-        ig_dict = {"ig_gold": []}
+            ig_dict["ig_gold"] = convert_to_triplet_ig_top(
+                ig_dict["ig_gold"], args.retention_threshold
+            )
+            record_list.append([ig_dict])
+            # record running time
+            toc = time.perf_counter()
+            print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
+            # pprint(torch.cuda.memory_stats()) #没什么用
+            # print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
 
-        logits = model.forward(
-            **(batch),
-            target_token_idx=-1,
-            use_cache=True,
-            output_hidden_states=False
-        )
-        # logits = outputs.logits
-        predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
-
-        model.forward_with_partitioning(target_token_idx=-1, times=args.times)
-        ig_gold = model.calculate_integrated_gradients(target_label=predicted_class)
-
-        for ig in ig_gold:
-            # 为batch inference预留的for
-            ig_dict["ig_gold"].append(ig)
-
-        ig_dict["ig_gold"] = convert_to_triplet_ig_top(
-            ig_dict["ig_gold"], args.retention_threshold
-        )
-        record_list.append([ig_dict])
-        # record running time
-        toc = time.perf_counter()
-        print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
-        # pprint(torch.cuda.memory_stats()) #没什么用
-        # print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
-
-        model.clean()
+            model.clean()
 
     with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:
         fw.write(record_list)
