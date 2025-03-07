@@ -205,10 +205,10 @@
                 "--max_seq_length",
                 "32768",
                 "--times",
-                "3",
+                "7",
                 "--result_file",
                 "lm_mmlu.json",
-                "--retention_threshold",
+                "--retention_percentile",
                 "99"
             ],
         },

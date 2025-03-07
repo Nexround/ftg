@@ -1,7 +1,6 @@
 import random
 import time
 import argparse
-import logging
 import os
 
 import jsonlines
@@ -11,19 +10,12 @@ from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from src.module.func import (
-    convert_to_triplet_ig_top,
+    generate_top_ig_triplets,
     parse_comma_separated,
 )
 from src.module.Qwen2Model import CustomQwen2ForCausalLM
-from pprint import pprint
 
-# set logger
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-    datefmt="%m/%d/%Y %H:%M:%S",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
+
 mmlu_all_sets = [
     "college_biology",
     "college_chemistry",
@@ -122,7 +114,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num_sample", default=10000, type=int)
 
-    parser.add_argument("--retention_threshold", default=99, type=int)
+    parser.add_argument("--retention_percentile", default=99, type=int)
     parser.add_argument("--result_file", type=str)
     parser.add_argument("--dataset", type=parse_comma_separated)
 
@@ -170,7 +162,7 @@ if __name__ == "__main__":
     # model.gradient_checkpointing_enable() # 目前看来没什么用
     # model.model.embed_tokens.to("cpu")
     # model.lm_head.to("cpu")
-    # model = torch.compile(model)
+    model = torch.compile(model)
     # print(model.get_memory_footprint())
 
     # data parallel
@@ -228,13 +220,18 @@ if __name__ == "__main__":
 
         return conversation
 
-
     record_list = []
-    for subset in mmlu_all_sets:
+    fw = jsonlines.open(os.path.join(args.output_dir, args.result_file), "a")  # !w
+    for subset in tqdm(mmlu_all_sets, desc="📦"):
         dataset = load_dataset("cais/mmlu", subset)
         test_dataset = dataset["test"]
         few_shot_samples = dataset["dev"]
-        for test_sample in tqdm(test_dataset, desc=f"Evaluating {subset}"):
+        for idx, test_sample in tqdm(
+            enumerate(test_dataset),
+            desc=f"🗂️ Evaluating {subset}",
+            total=len(test_dataset),
+            leave=False,
+        ):
 
             # 构建对话历史
             conversation = build_conversation(subset, few_shot_samples, test_sample)
@@ -242,40 +239,34 @@ if __name__ == "__main__":
                 conversation,
                 add_generation_prompt=True,
                 return_tensors="pt",
-                return_dict=True, # 返回input_ids和attention_mask
+                return_dict=True,  # 返回input_ids和attention_mask
             ).to(device)
-
+            inputs["attention_mask"] = inputs["attention_mask"].to(torch.int8)
             # record running time
             tic = time.perf_counter()
 
-            ig_dict = {"ig_gold": []}
-
+            ig_dict = {"dataset_subset": subset, "idx": idx, "ig_gold": []}
             logits = model.forward(
                 **(inputs),
                 target_token_idx=-1,
-                use_cache=True,
+                # use_cache=False,
             )
-            # logits = outputs.logits
-            predicted_class = int(torch.argmax(logits, dim=-1))  # 预测类别
-
-            model.forward_with_partitioning(target_token_idx=-1, times=args.times)
-            ig_gold = model.calculate_integrated_gradients(target_label=predicted_class)
+            predicted_label = int(torch.argmax(logits, dim=-1))  # 预测类别
+            print(tokenizer.decode([predicted_label]))
+            model.forward_with_partitioning(
+                target_token_idx=-1, times=args.times, predicted_label=predicted_label
+            )
+            ig_gold = model.integrated_gradients
 
             for ig in ig_gold:
                 # 为batch inference预留的for
                 ig_dict["ig_gold"].append(ig)
 
-            ig_dict["ig_gold"] = convert_to_triplet_ig_top(
-                ig_dict["ig_gold"], args.retention_threshold
+            ig_dict["ig_gold"] = generate_top_ig_triplets(
+                ig_dict["ig_gold"], args.retention_percentile
             )
-            record_list.append([ig_dict])
+            fw.write([ig_dict])
             # record running time
             toc = time.perf_counter()
             print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
-            # pprint(torch.cuda.memory_stats()) #没什么用
-            # print(f"Gradients Memory: {get_gradient_size(model):.2f} MB")
-
             model.clean()
-
-    with jsonlines.open(os.path.join(args.output_dir, args.result_file), "w") as fw:
-        fw.write(record_list)

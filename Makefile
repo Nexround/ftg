@@ -87,6 +87,15 @@ lm_trivia_qa:
 	--num_sample 10000 \
 	--retention_threshold 99 
 
+lm_mmlu:
+	accelerate launch mmlu_analyse.py \
+		--model_path Qwen/Qwen2.5-0.5B-Instruct \
+		--output_dir /workspace/ftg/target_neurons \
+		--max_seq_length 32768 \
+		--times 7 \
+		--result_file lm_mmlu.json \
+		--retention_percentile 99
+
 token_cls_agnews:
 	python ./src/token_cls.py \
 	--bert_model /openbayes/home/ftg/results/agnews_checkpoint-22500 \

@@ -8,26 +8,27 @@ from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 import torch.nn as nn
 
+
 class MinimalDotProductClassifier(nn.Module):
     def __init__(self, hidden_size, num_labels):
         super().__init__()
         self.num_labels = num_labels
-        
+
         # Create the classifier layer
         self.classifier = nn.Linear(hidden_size, num_labels)
-        
+
         # Initialize the classifier weights with the minimal dot product vectors
         classifier_weights = self._generate_minimal_dot_product_vectors(
             dim=hidden_size, num_labels=num_labels
         )
-        
+
         self.classifier.weight.data = torch.tensor(
             classifier_weights, dtype=torch.float32
         )
-        
+
         # Initialize the bias to zero
         self.classifier.bias.data.fill_(0.0)
-        
+
         # Freeze the classifier parameters (set requires_grad=False)
         for param in self.classifier.parameters():
             param.requires_grad = False
@@ -42,7 +43,10 @@ class MinimalDotProductClassifier(nn.Module):
         initial_vectors = np.random.randn(num_labels, dim)
         initial_vectors /= np.linalg.norm(initial_vectors, axis=1, keepdims=True)
         result = minimize(
-            loss_fn, initial_vectors.flatten(), method="L-BFGS-B", options={"disp": True}
+            loss_fn,
+            initial_vectors.flatten(),
+            method="L-BFGS-B",
+            options={"disp": True},
         )
         return result.x.reshape(num_labels, dim)
 
@@ -50,9 +54,10 @@ class MinimalDotProductClassifier(nn.Module):
         # Check if x is 3D (batch_size, seq_len, hidden_size)
         if x.ndimension() == 3:
             x = x[:, 0, :]  # Take the first token/sequence element
-        
+
         logits = self.classifier(x)
         return logits
+
 
 def generate_minimal_dot_product_vectors(dim=128, num_labels=6):
     def loss_fn(flat_vectors):
@@ -175,23 +180,24 @@ def plot_points(points, color="blue", marker="o", title="Scatter Plot of Points"
     plt.show()
 
 
-def convert_to_triplet_ig_top(ig_list, RETENTION_THRESHOLD=99):
-    # ig_list 12个transformer block，每个block 3072个ffn中间层激活权重
-    # i：Transformer 层的索引（0 到 11，共 12 层）
-    # j：每个层中 FFN 中间层激活权重的索引（0 到 3071，共 3072 个中间层）
-    # ig[i][j]：集成梯度值，即该位置的权重。
-    ig_triplet = []
-    ig_list = [torch.tensor(value, dtype=torch.float32) for value in ig_list]
-    ig = np.array(ig_list)  # 12, 3072
-    # 计算前5%的阈值
-    threshold = np.percentile(ig, RETENTION_THRESHOLD)
+def generate_top_ig_triplets(per_layer_ig_values, retention_percentile=99):
 
-    for i in range(ig.shape[0]):
-        for j in range(ig.shape[1]):
-            if ig[i][j] >= threshold:
-                ig_triplet.append([i, j, float(ig[i][j])])
+    ig_triplets = []
 
-    return ig_triplet
+    ig_tensor = torch.stack(per_layer_ig_values).to(dtype=torch.float16)
+    ig_matrix = ig_tensor.numpy()
+
+    # 计算全局保留阈值
+    global_threshold = np.percentile(ig_matrix, retention_percentile)
+
+    # 遍历所有层和神经元
+    for layer_idx in range(ig_matrix.shape[0]):
+        for neuron_idx in range(ig_matrix.shape[1]):
+            current_ig = ig_matrix[layer_idx][neuron_idx]
+            if current_ig >= global_threshold:
+                ig_triplets.append([layer_idx, neuron_idx, float(current_ig)])
+
+    return ig_triplets
 
 
 def convert_to_triplet_ig(ig_list):
@@ -277,7 +283,7 @@ def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
         # 确保权重和偏置的 requires_grad 为 True
         intermediate_dense.weight.requires_grad = True
         intermediate_dense.bias.requires_grad = True
-        output_dense.weight.requires_grad = False # 不允许调整输出层权重
+        output_dense.weight.requires_grad = False  # 不允许调整输出层权重
         output_dense.bias.requires_grad = False
 
         # 注册单个钩子函数，针对输入权重的所有指定神经元
@@ -313,6 +319,7 @@ def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
 
     return hooks  # 返回 hooks 以便后续管理和清理
 
+
 def unfreeze_ffn_qwen(model, trainable_neurons):
     hooks = []
 
@@ -330,7 +337,7 @@ def unfreeze_ffn_qwen(model, trainable_neurons):
         # 确保权重和偏置的 requires_grad 为 True
         # intermediate_dense.weight.requires_grad = True
         # intermediate_dense.bias.requires_grad = True
-        output_dense.weight.requires_grad = True 
+        output_dense.weight.requires_grad = True
 
         # 注册单个钩子函数，针对输入权重的所有指定神经元
         # def input_weight_hook(grad):
@@ -364,6 +371,7 @@ def unfreeze_ffn_qwen(model, trainable_neurons):
         # hooks.append(output_dense.bias.register_hook(output_bias_hook))
 
     return hooks  # 返回 hooks 以便后续管理和清理
+
 
 def compute_metrics(pred, method="weighted"):
     """

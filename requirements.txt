@@ -12,3 +12,4 @@ torch
 tqdm
 transformers
 accelerate
+deepspeed
