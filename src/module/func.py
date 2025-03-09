@@ -180,22 +180,20 @@ def plot_points(points, color="blue", marker="o", title="Scatter Plot of Points"
     plt.show()
 
 
-def generate_top_ig_triplets(per_layer_ig_values, retention_percentile=99):
+def generate_top_ig_triplets(per_layer_ig_values, per_knowledge_neuron_num):
 
     ig_triplets = []
 
     ig_tensor = torch.stack(per_layer_ig_values).to(dtype=torch.float16)
-    ig_matrix = ig_tensor.numpy()
-
-    # 计算全局保留阈值
-    global_threshold = np.percentile(ig_matrix, retention_percentile)
-
-    # 遍历所有层和神经元
-    for layer_idx in range(ig_matrix.shape[0]):
-        for neuron_idx in range(ig_matrix.shape[1]):
-            current_ig = ig_matrix[layer_idx][neuron_idx]
-            if current_ig >= global_threshold:
-                ig_triplets.append([layer_idx, neuron_idx, float(current_ig)])
+    ig_array = ig_tensor.numpy()
+    ig_flattened = ig_array.flatten()
+    top_K_indices = np.argpartition(ig_flattened, -per_knowledge_neuron_num)[
+        -per_knowledge_neuron_num:
+    ]
+    row_indices, col_indices = np.unravel_index(top_K_indices, ig_array.shape)
+    for layer_idx, neuron_idx  in zip(row_indices, col_indices):
+        current_ig = ig_array[layer_idx, neuron_idx]
+        ig_triplets.append([int(layer_idx), int(neuron_idx), float(current_ig)])
 
     return ig_triplets
 

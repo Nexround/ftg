@@ -15,18 +15,19 @@ from src.module.func import (
 )
 from src.module.Qwen2Model import CustomQwen2ForCausalLM
 
+torch.set_float32_matmul_precision("medium")
 
 mmlu_all_sets = [
-    "college_biology",
-    "college_chemistry",
-    "college_computer_science",
-    "college_mathematics",
-    "college_physics",
-    "electrical_engineering",
-    "astronomy",
-    "anatomy",
-    "abstract_algebra",
-    "machine_learning",
+    # "college_biology",
+    # "college_chemistry",
+    # "college_computer_science",
+    # "college_mathematics",
+    # "college_physics",
+    # "electrical_engineering",
+    # "astronomy",
+    # "anatomy",
+    # "abstract_algebra",
+    # "machine_learning",
     "clinical_knowledge",
     "global_facts",
     "management",
@@ -114,8 +115,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num_sample", default=10000, type=int)
 
-    parser.add_argument("--retention_percentile", default=99, type=int)
+    parser.add_argument("--per_knowledge_neuron_num", default=5, type=int)
     parser.add_argument("--result_file", type=str)
+    parser.add_argument("--write_mode", type=str)
     parser.add_argument("--dataset", type=parse_comma_separated)
 
     # parse arguments
@@ -221,7 +223,7 @@ if __name__ == "__main__":
         return conversation
 
     record_list = []
-    fw = jsonlines.open(os.path.join(args.output_dir, args.result_file), "a")  # !w
+    fw = jsonlines.open(os.path.join(args.output_dir, args.result_file), mode=args.write_mode if args.write_mode is not None else "w") 
     for subset in tqdm(mmlu_all_sets, desc="📦"):
         dataset = load_dataset("cais/mmlu", subset)
         test_dataset = dataset["test"]
@@ -263,9 +265,9 @@ if __name__ == "__main__":
                 ig_dict["ig_gold"].append(ig)
 
             ig_dict["ig_gold"] = generate_top_ig_triplets(
-                ig_dict["ig_gold"], args.retention_percentile
+                ig_dict["ig_gold"], args.per_knowledge_neuron_num
             )
-            fw.write([ig_dict])
+            fw.write(ig_dict)
             # record running time
             toc = time.perf_counter()
             print(f"***** Costing time: {toc - tic:0.4f} seconds *****")

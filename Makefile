@@ -88,13 +88,16 @@ lm_trivia_qa:
 	--retention_threshold 99 
 
 lm_mmlu:
-	accelerate launch mmlu_analyse.py \
+	accelerate launch \
+		--mixed_precision bf16 \
+		mmlu_analyse.py \
 		--model_path Qwen/Qwen2.5-0.5B-Instruct \
 		--output_dir /workspace/ftg/target_neurons \
 		--max_seq_length 32768 \
 		--times 7 \
 		--result_file lm_mmlu.json \
-		--retention_percentile 99
+		--per_knowledge_neuron_num 5 \
+		--write_mode a
 
 token_cls_agnews:
 	python ./src/token_cls.py \
