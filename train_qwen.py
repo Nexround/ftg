@@ -174,6 +174,7 @@ if __name__ == "__main__":
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
+        attn_implementation="flash_attention_2",
         cache_dir="/cache/huggingface/hub",
     )
 
@@ -276,9 +277,9 @@ if __name__ == "__main__":
         # deepspeed=args.ds_config,
     )
     # 只传入 requires_grad 为 True 的参数
-    # optimizer = AdamW(
-    #     filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate
-    # )
+    optimizer = AdamW(
+        filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate
+    )
     tokenizer.pad_token = tokenizer.eos_token
     # data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     trainer = Trainer(
@@ -286,7 +287,7 @@ if __name__ == "__main__":
         args=training_args,
         train_dataset=dataset,
         data_collator=data_collator_t,
-        # optimizers=(optimizer, None),
+        optimizers=(optimizer, None),
     )
 
     # 开始训练

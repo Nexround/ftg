@@ -96,8 +96,8 @@ lm_mmlu:
 		--max_seq_length 32768 \
 		--times 7 \
 		--result_file lm_mmlu.json \
-		--per_knowledge_neuron_num 5 \
-		--write_mode a
+		--percentage 90 \
+		--write_mode w
 
 token_cls_agnews:
 	python ./src/token_cls.py \

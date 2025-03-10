@@ -2,6 +2,7 @@ import random
 import time
 import argparse
 import os
+import json
 
 import jsonlines
 import torch
@@ -12,22 +13,23 @@ from transformers import AutoTokenizer
 from src.module.func import (
     generate_top_ig_triplets,
     parse_comma_separated,
+    count_high_ig_indices,
 )
 from src.module.Qwen2Model import CustomQwen2ForCausalLM
 
 torch.set_float32_matmul_precision("medium")
 
 mmlu_all_sets = [
-    # "college_biology",
-    # "college_chemistry",
-    # "college_computer_science",
-    # "college_mathematics",
-    # "college_physics",
-    # "electrical_engineering",
-    # "astronomy",
-    # "anatomy",
-    # "abstract_algebra",
-    # "machine_learning",
+    "college_biology",
+    "college_chemistry",
+    "college_computer_science",
+    "college_mathematics",
+    "college_physics",
+    "electrical_engineering",
+    "astronomy",
+    "anatomy",
+    "abstract_algebra",
+    "machine_learning",
     "clinical_knowledge",
     "global_facts",
     "management",
@@ -115,7 +117,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num_sample", default=10000, type=int)
 
-    parser.add_argument("--per_knowledge_neuron_num", default=5, type=int)
+    parser.add_argument("--percentage", default=90, type=int)
     parser.add_argument("--result_file", type=str)
     parser.add_argument("--write_mode", type=str)
     parser.add_argument("--dataset", type=parse_comma_separated)
@@ -152,20 +154,20 @@ if __name__ == "__main__":
     print("***** CUDA.empty_cache() *****")
     torch.cuda.empty_cache()
     # quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     model = CustomQwen2ForCausalLM.from_pretrained(
         args.model_path,
         # quantization_config=quantization_config,
-        # torch_dtype="auto",
         torch_dtype=torch.bfloat16,
-        # attn_implementation="flash_attention_2",
+        attn_implementation="flash_attention_2",
         device_map="auto",
     )
+    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+    model = torch.compile(model)
+
     # model.gradient_checkpointing_enable() # 目前看来没什么用
     # model.model.embed_tokens.to("cpu")
     # model.lm_head.to("cpu")
-    model = torch.compile(model)
-    # print(model.get_memory_footprint())
+    print(model.get_memory_footprint())
 
     # data parallel
     if n_gpu > 1:
@@ -222,8 +224,13 @@ if __name__ == "__main__":
 
         return conversation
 
-    record_list = []
-    fw = jsonlines.open(os.path.join(args.output_dir, args.result_file), mode=args.write_mode if args.write_mode is not None else "w") 
+    update_fn, counter = count_high_ig_indices(
+        args.percentage, model.config.num_hidden_layers, model.config.hidden_size
+    )
+    # fw = jsonlines.open(
+    #     os.path.join(args.output_dir, args.result_file),
+    #     mode=args.write_mode if args.write_mode is not None else "w",
+    # )
     for subset in tqdm(mmlu_all_sets, desc="📦"):
         dataset = load_dataset("cais/mmlu", subset)
         test_dataset = dataset["test"]
@@ -247,7 +254,7 @@ if __name__ == "__main__":
             # record running time
             tic = time.perf_counter()
 
-            ig_dict = {"dataset_subset": subset, "idx": idx, "ig_gold": []}
+            # ig_dict = {"dataset_subset": subset, "idx": idx, "mvp": []}
             logits = model.forward(
                 **(inputs),
                 target_token_idx=-1,
@@ -258,16 +265,25 @@ if __name__ == "__main__":
             model.forward_with_partitioning(
                 target_token_idx=-1, times=args.times, predicted_label=predicted_label
             )
-            ig_gold = model.integrated_gradients
+            mvp = model.integrated_gradients
 
-            for ig in ig_gold:
-                # 为batch inference预留的for
-                ig_dict["ig_gold"].append(ig)
+            # for ig in mvp:
+            #     # 为batch inference预留的for
+            #     ig_dict["mvp"].append(ig)
+            update_fn(ig_values=mvp)
+            # ig_dict["mvp"] = generate_top_ig_triplets(
+            #     ig_dict["mvp"], args.per_knowledge_neuron_num
+            # )
+            
 
-            ig_dict["ig_gold"] = generate_top_ig_triplets(
-                ig_dict["ig_gold"], args.per_knowledge_neuron_num
-            )
-            fw.write(ig_dict)
+            # 先转换 set 为 list
+            # json_str = json.dumps(data, default=list)
+            # fw.write(list(set(counter)))
+            with open(os.path.join(args.output_dir, args.result_file), "w", encoding="utf-8") as f:
+                json_data = {str(k): v for k, v in counter.items()}
+
+
+                json.dump(json_data, f)
             # record running time
             toc = time.perf_counter()
             print(f"***** Costing time: {toc - tic:0.4f} seconds *****")

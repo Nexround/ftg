@@ -208,8 +208,8 @@
                 "7",
                 "--result_file",
                 "lm_mmlu.json",
-                "--per_knowledge_neuron_num",
-                "5"
+                "--percentage",
+                "90"
             ],
         },
         {

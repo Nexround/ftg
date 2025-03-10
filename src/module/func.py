@@ -191,11 +191,28 @@ def generate_top_ig_triplets(per_layer_ig_values, per_knowledge_neuron_num):
         -per_knowledge_neuron_num:
     ]
     row_indices, col_indices = np.unravel_index(top_K_indices, ig_array.shape)
-    for layer_idx, neuron_idx  in zip(row_indices, col_indices):
-        current_ig = ig_array[layer_idx, neuron_idx]
-        ig_triplets.append([int(layer_idx), int(neuron_idx), float(current_ig)])
+    for layer_idx, neuron_idx in zip(row_indices, col_indices):
+        # current_ig = ig_array[layer_idx, neuron_idx]
+        ig_triplets.append([int(layer_idx), int(neuron_idx)])
+        # ig_triplets.append([int(layer_idx), int(neuron_idx), float(current_ig)])
 
     return ig_triplets
+
+
+from collections import Counter
+
+
+def count_high_ig_indices(percentage, num_layers, hidden_size):
+    ig_counter = Counter((x, y) for x in range(0, num_layers) for y in range(0, hidden_size))
+
+    def _(ig_values):
+        ig_tensor = torch.stack(ig_values).to(dtype=torch.float16)
+        ig_array = ig_tensor.numpy()
+        threshold = np.percentile(ig_array, percentage)
+        indices = np.argwhere(ig_array >= threshold)
+        ig_counter.update(map(tuple, indices))
+
+    return _, ig_counter
 
 
 def convert_to_triplet_ig(ig_list):
