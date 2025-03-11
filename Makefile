@@ -92,7 +92,7 @@ lm_mmlu:
 		--mixed_precision bf16 \
 		mmlu_analyse.py \
 		--model_path Qwen/Qwen2.5-0.5B-Instruct \
-		--output_dir /workspace/ftg/target_neurons \
+		--output_dir ./target_neurons \
 		--max_seq_length 32768 \
 		--times 7 \
 		--result_file lm_mmlu.json \

@@ -78,6 +78,8 @@ mmlu_all_sets = [
     "us_foreign_policy",
     "conceptual_physics",
 ]
+for subset in tqdm(mmlu_all_sets):
+    load_dataset("cais/mmlu", subset)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
