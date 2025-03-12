@@ -7,6 +7,7 @@ from collections import defaultdict
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 import torch.nn as nn
+import h5py
 
 
 class MinimalDotProductClassifier(nn.Module):
@@ -180,22 +181,64 @@ def plot_points(points, color="blue", marker="o", title="Scatter Plot of Points"
     plt.show()
 
 
-def generate_top_ig_triplets(per_layer_ig_values, per_knowledge_neuron_num):
+# def generate_top_ig_triplets(per_layer_ig_values, per_knowledge_neuron_num):
 
-    ig_triplets = []
+#     ig_triplets = []
 
-    ig_tensor = torch.stack(per_layer_ig_values).to(dtype=torch.float16)
+#     ig_tensor = torch.stack(per_layer_ig_values).to(dtype=torch.float16)
+#     ig_array = ig_tensor.numpy()
+#     ig_flattened = ig_array.flatten()
+#     top_K_indices = np.argpartition(ig_flattened, -per_knowledge_neuron_num)[
+#         -per_knowledge_neuron_num:
+#     ]
+#     row_indices, col_indices = np.unravel_index(top_K_indices, ig_array.shape)
+#     for layer_idx, neuron_idx in zip(row_indices, col_indices):
+#         # current_ig = ig_array[layer_idx, neuron_idx]
+#         ig_triplets.append([int(layer_idx), int(neuron_idx)])
+#         # ig_triplets.append([int(layer_idx), int(neuron_idx), float(current_ig)])
+#     return ig_triplets
+
+def save_array_to_hdf5(filename, array):
+    ig_tensor = torch.stack(array).to(dtype=torch.float16)
+    # 转换为numpy数组
+    array = ig_tensor.numpy()
+    with h5py.File(filename, 'a') as f:
+        if 'dataset' not in f:
+            # 创建可扩展数据集
+            m, n = array.shape
+            dset = f.create_dataset(
+                'dataset',
+                shape=(0, m, n),
+                maxshape=(None, m, n),
+                chunks=True,
+                compression='gzip'
+            )
+        else:
+            dset = f['dataset']
+            if array.shape != dset.shape[1:]:
+                raise ValueError("Array shape mismatch")
+        
+        # 扩展数据集并写入
+        dset.resize(dset.shape[0] + 1, axis=0)
+        dset[-1] = array
+        
+def generate_ig_triplets(ig_values):
+    # 将输入的IG值堆叠成张量并转换为float16类型
+    ig_tensor = torch.stack(ig_values).to(dtype=torch.float16)
+    # 转换为numpy数组
     ig_array = ig_tensor.numpy()
-    ig_flattened = ig_array.flatten()
-    top_K_indices = np.argpartition(ig_flattened, -per_knowledge_neuron_num)[
-        -per_knowledge_neuron_num:
-    ]
-    row_indices, col_indices = np.unravel_index(top_K_indices, ig_array.shape)
-    for layer_idx, neuron_idx in zip(row_indices, col_indices):
-        # current_ig = ig_array[layer_idx, neuron_idx]
-        ig_triplets.append([int(layer_idx), int(neuron_idx)])
-        # ig_triplets.append([int(layer_idx), int(neuron_idx), float(current_ig)])
-
+    # 获取层数和每层的神经元数
+    rows, cols = ig_array.shape
+    # 生成层索引（每个层重复cols次）
+    layer_indices = np.repeat(np.arange(rows), cols)
+    # 生成神经元索引（平铺cols个神经元的索引rows次）
+    neuron_indices = np.tile(np.arange(cols), rows)
+    # 将IG值数组展平为一维
+    values = ig_array.ravel()
+    # 将三列数据按列堆叠成三元组数组
+    triplets = np.column_stack((layer_indices, neuron_indices, values))
+    # 转换为列表并确保数据类型正确
+    ig_triplets = [[int(layer), int(neuron), float(value)] for layer, neuron, value in triplets]
     return ig_triplets
 
 
@@ -203,7 +246,9 @@ from collections import Counter
 
 
 def count_high_ig_indices(percentage, num_layers, hidden_size):
-    ig_counter = Counter((x, y) for x in range(0, num_layers) for y in range(0, hidden_size))
+    ig_counter = Counter(
+        (x, y) for x in range(0, num_layers) for y in range(0, hidden_size)
+    )
 
     def _(ig_values):
         ig_tensor = torch.stack(ig_values).to(dtype=torch.float16)

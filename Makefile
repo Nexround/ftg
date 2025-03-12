@@ -99,6 +99,18 @@ lm_mmlu:
 		--percentage 90 \
 		--write_mode w
 
+lm_mmlu_hdf5:
+	accelerate launch \
+		--mixed_precision bf16 \
+		mmlu_analyse_hdf5.py \
+		--model_path Qwen/Qwen2.5-0.5B-Instruct \
+		--output_dir ./hdf5 \
+		--max_seq_length 32768 \
+		--times 7 \
+		--result_file mmlu.h5 \
+		--percentage 90 \
+		--write_mode w
+
 token_cls_agnews:
 	python ./src/token_cls.py \
 	--bert_model /openbayes/home/ftg/results/agnews_checkpoint-22500 \

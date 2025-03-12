@@ -98,8 +98,8 @@ class CustomQwen2ForCausalLM(Qwen2ForCausalLM):
                     # 逐个样本处理
                     for i in range(times):
                         # 准备单个样本
-                        single_input_ids = self._kwargs["input_ids"][i]
-                        single_attention_mask = self._kwargs["attention_mask"][i]
+                        single_input_ids = self._kwargs["input_ids"][i].unsqueeze(0)
+                        single_attention_mask = self._kwargs["attention_mask"][i].unsqueeze(0)
                         # 注册当前样本的Hook
                         hook = self._create_layer_hook(
                             target_token_idx=target_token_idx,
