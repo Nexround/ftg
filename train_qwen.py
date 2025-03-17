@@ -176,7 +176,9 @@ if __name__ == "__main__":
         args.model,
         attn_implementation="flash_attention_2",
         cache_dir="/cache/huggingface/hub",
+        torch_dtype=torch.bfloat16,
     )
+    model.to("cuda")
 
     dataset = dataset["train"].shuffle(seed=42)
 
@@ -272,8 +274,10 @@ if __name__ == "__main__":
         bf16=True,
         lr_scheduler_type="cosine",
         warmup_ratio=0.01,
-        dataloader_num_workers=8,
+        dataloader_num_workers=1,
         remove_unused_columns=False,
+        # gradient_checkpointing=True,
+        report_to=None,
         # deepspeed=args.ds_config,
     )
     # 只传入 requires_grad 为 True 的参数

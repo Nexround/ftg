@@ -543,16 +543,16 @@ train_agnews_14_full_roberta:
 	--learning_rate 5e-5 \
 	--num_train_epochs 9
 
-train_qwen_reranker_target:
-	python train_qwen.py \
+train_qwen_reranker_loki:
+	accelerate launch train_qwen.py \
 	--dataset "lightblue/reranker_continuous_filt_max7_train" \
-	--target_neurons_path "target_neurons/random_RATIO10.json" \
-	--model "/root/.cache/modelscope/hub/Qwen/Qwen2.5-0.5B-Instruct" \
+	--target_neurons_path "target_neurons/selected_neurons_spindle.json" \
+	--model "Qwen/Qwen2.5-0.5B-Instruct" \
 	--output_dir "./results" \
 	--output_prefix "experiment_name" \
 	--batch_size 1 \
 	--num_train_epochs 1 \
-	--train_option target_neurons \
+	--train_option loki \
 	--learning_rate 1e-5 \
 
 train_qwen_reranker_lora:
