@@ -121,6 +121,17 @@ lm_mmlu_qwen7b_hdf5:
 		--result_file qwen7b_mmlu.h5 \
 		--write_mode w
 
+lm_mmlu_llama8b_hdf5:
+	accelerate launch \
+		--mixed_precision bf16 \
+		mmlu_analyse_hdf5.py \
+		--model_path ~/Llama3_8B \
+		--output_dir ./hdf5 \
+		--max_seq_length 32768 \
+		--times 7 \
+		--result_file Llama3_8B_mmlu.h5 \
+		--write_mode w
+
 token_cls_agnews:
 	python ./src/token_cls.py \
 	--bert_model /openbayes/home/ftg/results/agnews_checkpoint-22500 \
