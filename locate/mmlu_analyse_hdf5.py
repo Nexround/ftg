@@ -116,7 +116,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num_sample", default=10000, type=int)
 
-    parser.add_argument("--percentage", default=90, type=int)
     parser.add_argument("--result_file", type=str)
     parser.add_argument("--write_mode", type=str)
     parser.add_argument("--dataset", type=parse_comma_separated)

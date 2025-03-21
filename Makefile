@@ -108,7 +108,17 @@ lm_mmlu_hdf5:
 		--max_seq_length 32768 \
 		--times 7 \
 		--result_file mmlu.h5 \
-		--percentage 90 \
+		--write_mode w
+
+lm_mmlu_qwen7b_hdf5:
+	accelerate launch \
+		--mixed_precision bf16 \
+		mmlu_analyse_hdf5.py \
+		--model_path Qwen/Qwen2.5-7B-Instruct \
+		--output_dir ./hdf5 \
+		--max_seq_length 32768 \
+		--times 7 \
+		--result_file qwen7b_mmlu.h5 \
 		--write_mode w
 
 token_cls_agnews:
