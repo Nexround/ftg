@@ -124,7 +124,7 @@ lm_mmlu_qwen7b_hdf5:
 lm_mmlu_llama8b_hdf5:
 	accelerate launch \
 		--mixed_precision bf16 \
-		mmlu_analyse_hdf5.py \
+		mmlu_analyse_hdf5_L.py \
 		--model_path ~/Llama3_8B \
 		--output_dir ./hdf5 \
 		--max_seq_length 32768 \
