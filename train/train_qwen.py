@@ -284,6 +284,9 @@ if __name__ == "__main__":
     optimizer = AdamW(
         filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate
     )
+    # optimizer = SGD(
+    #     filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate
+    # )
     tokenizer.pad_token = tokenizer.eos_token
     # data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     trainer = Trainer(

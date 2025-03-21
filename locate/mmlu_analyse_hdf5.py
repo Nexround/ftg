@@ -2,7 +2,6 @@ import random
 import time
 import argparse
 import os
-import json
 
 import torch
 import numpy as np
