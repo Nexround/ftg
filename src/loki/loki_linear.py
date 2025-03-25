@@ -6,10 +6,9 @@ class LoKILinear(nn.Module):
     def __init__(self, original_linear, target_neurons):
         super().__init__()
         self.out_features = original_linear.out_features
+        self.in_features = original_linear.in_features
         self.active_pos = sorted(target_neurons)
-        self.fixed_pos = [
-            i for i in range(self.out_features) if i not in self.active_pos
-        ]
+        self.fixed_pos = [i for i in range(self.out_features) if i not in self.active_pos]
 
         # 参数验证
         if not all(0 <= idx < self.out_features for idx in self.active_pos):
@@ -19,55 +18,39 @@ class LoKILinear(nn.Module):
 
         # 分割权重矩阵
         W = original_linear.weight.data
-        self.active_part = nn.Linear(
-            original_linear.in_features, len(self.active_pos), bias=False
-        )
-        self.fixed_part = nn.Linear(
-            original_linear.in_features, len(self.fixed_pos), bias=False
-        )
-
-        # 初始化可训练部分
-        self.active_part.weight.data = W[self.active_pos].clone()
-        self.active_part.weight.requires_grad = True
-        # 固定非激活部分
-        self.fixed_part.weight.data = W[self.fixed_pos].clone()
-        self.fixed_part.weight.requires_grad = False
+        self.active_weight = nn.Parameter(W[self.active_pos].clone(), requires_grad=True)
+        self.fixed_weight = nn.Parameter(W[self.fixed_pos].clone(), requires_grad=False)
 
         # 处理偏置项
         if original_linear.bias is not None:
             b = original_linear.bias.data
-            self.active_bias = nn.Parameter(
-                b[self.active_pos].clone(), requires_grad=True
-            )
-            self.fixed_bias = nn.Parameter(
-                b[self.fixed_pos].clone(), requires_grad=False
-            )
+            self.active_bias = nn.Parameter(b[self.active_pos].clone(), requires_grad=True)
+            self.fixed_bias = nn.Parameter(b[self.fixed_pos].clone(), requires_grad=False)
         else:
-            self.register_parameter("active_bias", None)
-            self.register_parameter("fixed_bias", None)
+            self.register_parameter('active_bias', None)
+            self.register_parameter('fixed_bias', None)
+
+        # 预生成索引映射
+        index_map = torch.empty(self.out_features, dtype=torch.long)
+        index_map[self.active_pos] = torch.arange(len(self.active_pos))
+        index_map[self.fixed_pos] = torch.arange(len(self.fixed_pos)) + len(self.active_pos)
+        self.register_buffer('index_map', index_map)
 
     def forward(self, x):
-        # 分别计算激活部分和固定部分
-        active_out = self.active_part(x)
-        fixed_out = self.fixed_part(x)
-
-        # 添加偏置
+        # 合并权重并进行矩阵运算
+        weight = torch.cat([self.active_weight, self.fixed_weight], dim=0)
+        output = torch.matmul(x, weight.transpose(-1, -2))
+        
+        # 添加合并后的偏置
         if self.active_bias is not None:
-            active_out += self.active_bias
-            fixed_out += self.fixed_bias
+            bias = torch.cat([self.active_bias, self.fixed_bias], dim=0)
+            output += bias.unsqueeze(0).unsqueeze(0)  # 广播偏置到所有batch和序列位置
 
-        # 合并输出保持原始顺序
-        combined = torch.zeros(
-            (x.size(0), x.size(1), self.out_features), device=x.device, dtype=x.dtype
+        # 通过预生成索引重排输出
+        return output.gather(
+            dim=-1,
+            index=self.index_map.view(1, 1, -1).expand(output.size(0), output.size(1), -1)
         )
-        combined[:, :, self.active_pos] = active_out
-        combined[:, :, self.fixed_pos] = fixed_out.detach()  # 阻断梯度传播
-
-        return combined
-
-    def get_trainable_params(self):
-        """获取当前可训练参数的数量统计"""
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
 def replace_all_target_linear_qwen(model, active_neurons):

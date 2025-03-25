@@ -100,7 +100,7 @@ class FlagEmbeddingCrossEncoder:
 
 class LBCrossEncoder:
     def __init__(self, model_path: str, **kwargs):
-        self.llm = LLM(model=model_path, gpu_memory_utilization=0.7)
+        self.llm = LLM(model=model_path, gpu_memory_utilization=0.6)
         self.sampling_params = SamplingParams(
             temperature=0.0, logprobs=14, max_tokens=1
         )
@@ -191,8 +191,8 @@ dataset_names = [
 ]
 
 lightbl_ce, lightbl_name = (
-    LBCrossEncoder("lightblue/lb-reranker-0.5B-v1.0"),
-    "lightblue/lb-reranker-0.5B-v1.0",
+    LBCrossEncoder("/cache/models/loki_reranker_qwen2_5-0-5b-5_real"),
+    "loki_reranker_qwen2_5-0-5b-5",
 )
 
 

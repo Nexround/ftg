@@ -19,7 +19,10 @@ from src.module.func import (
 
 import torch
 from torch.optim import AdamW
-from src.module.loki_linear import replace_all_target_linear_qwen
+from src.module.loki_linear import (
+    replace_all_target_linear_qwen,
+    restore_original_linears,
+)
 
 
 def data_collator_t(batch):
@@ -299,6 +302,8 @@ if __name__ == "__main__":
 
     # 开始训练
     trainer.train()
+    if args.train_option == "loki":
+        restore_original_linears(model)
     with open(f"{output_dir}/training_args.json", "w", encoding="utf-8") as f:
         json.dump(training_args.to_dict(), f, indent=4)
     with open(f"{output_dir}/args.json", "w", encoding="utf-8") as json_file:
