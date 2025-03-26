@@ -326,6 +326,23 @@ def remove_empty_dimensions(lst):
     return lst
 
 
+def apply_selective_ffn_gradient_masking(model, trainable_neurons):
+    hooks = []
+
+
+    for layer_idx, neuron_indices in enumerate(trainable_neurons):
+        target_mlp = model.model.layers[layer_idx].mlp.down_prj
+
+        def _hook(grad):
+            mask = torch.zeros_like(grad)
+            mask[neuron_indices, :] = 1  # 只允许指定神经元的梯度
+            return grad * mask
+
+        hooks.append(target_mlp.weight.register_hook(_hook))
+
+
+    return hooks  # 返回 hooks 以便后续管理和清理
+
 def unfreeze_ffn_connections_with_hooks_optimized(model, trainable_neurons):
     hooks = []
 

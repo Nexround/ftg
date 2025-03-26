@@ -1,6 +1,6 @@
 from transformers import Qwen2Config, Qwen2ForCausalLM
 from .loki_linear import LoKILinear
-
+import torch
 
 class LoKIQwen2Config(Qwen2Config):
     def __init__(self, target_neurons, **kwargs):
@@ -32,7 +32,8 @@ class LoKIQwen2ForCausalLM(Qwen2ForCausalLM):
             param.requires_grad = False
         for param in model.lm_head.parameters():
             param.requires_grad = False
-        model.replace_all_target_linear_qwen()  # 修改4：移除冗余参数传递
+        model.apply_selective_ffn_gradient_masking()  # 修改4：移除冗余参数传递
+        # model.replace_all_target_linear_qwen()  # 修改4：移除冗余参数传递
         for name, param in model.named_parameters():
             if param.requires_grad:
                 print(f"Parameter: {name}, Shape: {param.shape}")
@@ -59,3 +60,19 @@ class LoKIQwen2ForCausalLM(Qwen2ForCausalLM):
             setattr(self.model.layers[layer_idx].mlp, 'down_proj', new_layer)
             print(f"成功替换层{layer_idx}")
             # self.model.layers[layer_idx].mlp.down_proj = new_layer  # 修改5：直接使用属性赋值
+    def apply_selective_ffn_gradient_masking(self):
+        hooks = []
+
+
+        for layer_idx, neuron_indices in enumerate(self.target_neurons):
+            target_mlp = self.model.layers[layer_idx].mlp.down_prj
+
+            def _hook(grad):
+                mask = torch.zeros_like(grad)
+                mask[neuron_indices, :] = 1  # 只允许指定神经元的梯度
+                return grad * mask
+
+            hooks.append(target_mlp.weight.register_hook(_hook))
+
+
+        return hooks  # 返回 hooks 以便后续管理和清理
