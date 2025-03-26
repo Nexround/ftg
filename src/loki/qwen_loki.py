@@ -32,8 +32,8 @@ class LoKIQwen2ForCausalLM(Qwen2ForCausalLM):
             param.requires_grad = False
         for param in model.lm_head.parameters():
             param.requires_grad = False
-        model.apply_selective_ffn_gradient_masking()  # 修改4：移除冗余参数传递
-        # model.replace_all_target_linear_qwen()  # 修改4：移除冗余参数传递
+        # model.apply_selective_ffn_gradient_masking()  # 修改4：移除冗余参数传递
+        model.replace_all_target_linear_qwen()  # 修改4：移除冗余参数传递
         for name, param in model.named_parameters():
             if param.requires_grad:
                 print(f"Parameter: {name}, Shape: {param.shape}")
@@ -66,7 +66,7 @@ class LoKIQwen2ForCausalLM(Qwen2ForCausalLM):
 
         for layer_idx, neuron_indices in enumerate(self.target_neurons):
             target_mlp = self.model.layers[layer_idx].mlp.down_proj
-
+            target_mlp.weight.requires_grad = True
             def _hook(grad):
                 mask = torch.zeros_like(grad)
                 mask[neuron_indices, :] = 1  # 只允许指定神经元的梯度

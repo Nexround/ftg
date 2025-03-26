@@ -66,32 +66,34 @@ def restore_original_linears(model):
         layer = model.model.layers[layer_idx]
         mlp = layer.mlp
         
-        # 检查当前层的down_proj是否是LoKILinear实例
         if hasattr(mlp, 'down_proj') and isinstance(mlp.down_proj, LoKILinear):
             loki_layer = mlp.down_proj
             
             # 创建标准线性层
             original_linear = nn.Linear(
-                in_features = loki_layer.active_part.in_features,
-                out_features = loki_layer.out_features,
-                bias = loki_layer.active_bias is not None
+                in_features=loki_layer.in_features,
+                out_features=loki_layer.out_features,
+                bias=loki_layer.active_bias is not None
             )
             
-            # 合并权重
-            combined_weight = torch.zeros_like(original_linear.weight)
-            combined_weight[loki_layer.active_pos] = loki_layer.active_part.weight.data
-            combined_weight[loki_layer.fixed_pos] = loki_layer.fixed_part.weight.data
+            # 合并权重矩阵
+            device = loki_layer.active_weight.device
+            combined_weight = torch.zeros((loki_layer.out_features, loki_layer.in_features),
+                                        device=device)
+            combined_weight[loki_layer.active_pos] = loki_layer.active_weight.data
+            combined_weight[loki_layer.fixed_pos] = loki_layer.fixed_weight.data
+            original_linear.weight.data = combined_weight
             
-            # 合并偏置
+            # 合并偏置向量（如果存在）
             if loki_layer.active_bias is not None:
-                combined_bias = torch.zeros_like(original_linear.bias)
+                combined_bias = torch.zeros(loki_layer.out_features, 
+                                          device=device)
                 combined_bias[loki_layer.active_pos] = loki_layer.active_bias.data
                 combined_bias[loki_layer.fixed_pos] = loki_layer.fixed_bias.data
                 original_linear.bias.data = combined_bias
             
-            # 设置权重并保持设备一致
-            original_linear.weight.data = combined_weight
-            original_linear = original_linear.to(loki_layer.active_part.weight.device)
+            # 保持设备一致性
+            original_linear = original_linear.to(device)
             
             # 替换回原始结构
             setattr(mlp, 'down_proj', original_linear)
