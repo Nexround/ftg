@@ -65,7 +65,7 @@ class LoKIQwen2ForCausalLM(Qwen2ForCausalLM):
 
 
         for layer_idx, neuron_indices in enumerate(self.target_neurons):
-            target_mlp = self.model.layers[layer_idx].mlp.down_prj
+            target_mlp = self.model.layers[layer_idx].mlp.down_proj
 
             def _hook(grad):
                 mask = torch.zeros_like(grad)
