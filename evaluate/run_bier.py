@@ -191,8 +191,8 @@ dataset_names = [
 ]
 
 lightbl_ce, lightbl_name = (
-    LBCrossEncoder("/cache/models/lora_r1a2_reranker_0303/lora/"),
-    "lightblue/lora_reranker_r1a2",
+    LBCrossEncoder("/cache/models/loki_reranker_qwen2_5-0-5b-10_real"),
+    "loki_reranker_qwen2_5-0-5b-10",
 )
 
 
