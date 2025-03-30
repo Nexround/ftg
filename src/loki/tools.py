@@ -118,13 +118,3 @@ def restore_loki_model(
     original_model.save_pretrained(output_path)
     tokenizer = AutoTokenizer.from_pretrained(original_model_name)
     tokenizer.save_pretrained(output_path)
-    
-
-
-# 使用示例
-if __name__ == "__main__":
-    create_and_save_loki_model(
-        target_neurons_path="target_neurons/Qwen2.5-0.5B-Instruct/10.json",
-        save_dir="/cache/models/custom-model-test",
-        model_name="Qwen/Qwen2.5-0.5B-Instruct",
-    )
