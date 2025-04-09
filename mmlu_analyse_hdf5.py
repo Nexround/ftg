@@ -17,6 +17,7 @@ from src.module.Qwen2Model import CustomQwen2ForCausalLM
 torch.set_float32_matmul_precision("medium")
 
 mmlu_all_sets = [
+    "professional_law",
     "college_biology",
     "college_chemistry",
     "college_computer_science",
@@ -38,7 +39,6 @@ mmlu_all_sets = [
     "moral_scenarios",
     "computer_security",
     "high_school_microeconomics",
-    "professional_law",
     "medical_genetics",
     "professional_psychology",
     "jurisprudence",
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         args.model_path,
         # quantization_config=quantization_config,
         torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        # attn_implementation="flash_attention_2",
         device_map="auto",
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_path)
@@ -253,7 +253,7 @@ if __name__ == "__main__":
             logits = model.forward(
                 **(inputs),
                 target_token_idx=-1,
-                # use_cache=False,
+                use_cache=False,
             )
             predicted_label = int(torch.argmax(logits, dim=-1))  # 预测类别
             print(tokenizer.decode([predicted_label]))

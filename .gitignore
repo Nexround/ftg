@@ -6,6 +6,8 @@ logs/
 # C extensions
 *.so
 elasticsearch*
+evaluate/json/*
+*.csv
 # Distribution / packaging
 .Python
 build/

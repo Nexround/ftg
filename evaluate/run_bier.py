@@ -191,8 +191,8 @@ dataset_names = [
 ]
 
 lightbl_ce, lightbl_name = (
-    LBCrossEncoder("/cache/models/loki_reranker_qwen2_5-0-5b-20_averaged_real"),
-    "loki_reranker_qwen2_5-0-5b-20_averaged",
+    LBCrossEncoder("/cache/models/loki_reranker_qwen2_5-0-5b-30_inverted_real"),
+    "loki_reranker_qwen2_5-0-5b-30_inverted",
 )
 
 

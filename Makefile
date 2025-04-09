@@ -110,6 +110,17 @@ lm_mmlu_hdf5:
 		--result_file mmlu.h5 \
 		--write_mode w
 
+lm_mmlu_hdf5_20:
+	accelerate launch \
+		--mixed_precision bf16 \
+		mmlu_analyse_hdf5.py \
+		--model_path Qwen/Qwen2.5-0.5B-Instruct \
+		--output_dir ./hdf5 \
+		--max_seq_length 32768 \
+		--times 20 \
+		--result_file mmlu_20steps_qwen.h5 \
+		--write_mode w
+
 lm_mmlu_qwen7b_hdf5:
 	accelerate launch \
 		--mixed_precision bf16 \
