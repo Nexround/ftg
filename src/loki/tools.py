@@ -82,10 +82,11 @@ def restore_loki_model(
     model_path: str,
     original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
     output_path: str = "/cache/models/loki_reranker_qwen2_5-0-5b-10_real",
+    torch_dtype: torch.dtype = torch.bfloat16
 ):
     with open(target_neurons_path, "r", encoding="utf-8") as f:
         target_neurons = json.load(f)
-    original_model = AutoModelForCausalLM.from_pretrained(original_model_name)
+    original_model = AutoModelForCausalLM.from_pretrained(original_model_name, torch_dtype=torch_dtype)
     safe_tensor_path = Path(model_path, "model.safetensors")
     # 遍历所有层还原参数
     for layer_idx in range(original_model.config.num_hidden_layers):

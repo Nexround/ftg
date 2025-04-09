@@ -74,6 +74,78 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
                 target=self.model.layers[layer_idx].mlp.down_proj,
             )
 
+
+            layer_logits = []
+
+            # 逐个样本处理
+            for i in range(times):
+                # 准备单个样本
+                single_input_ids = self._kwargs["input_ids"]
+                single_attention_mask = self._kwargs["attention_mask"]
+                # 注册当前样本的Hook
+                hook = self._create_layer_hook(
+                    target_token_idx=target_token_idx,
+                    activations=layer_activation[i],  # 取对应的激活部分
+                    target=self.model.layers[layer_idx].mlp.down_proj,
+                )
+                # 处理单个样本
+                outputs = self.model(
+                    single_input_ids, single_attention_mask, **self._new_dict
+                )
+                single_logits = self.lm_head(
+                    outputs.last_hidden_state[:, target_token_idx, :]
+                )
+                layer_logits.append(single_logits)
+
+                # 清理
+                hook.remove()
+
+            # 堆叠结果
+            layer_logits = torch.cat(layer_logits)
+
+
+            # 保存结果并清理
+            self._partitioning_logits.append(layer_logits)
+            if "hook" in locals():  # 确保清理在try块中创建的hook
+                hook.remove()
+            self._compute_ig_for_layer(layer_idx, predicted_label)
+            self.model.layers[layer_idx].mlp.down_proj.weight.requires_grad = False
+            for param in self.parameters():
+                if param.grad is not None:
+                    print(param.grad)
+
+        return self._partitioning_logits
+
+    def _forward_with_partitioning(self, target_token_idx, times, predicted_label):
+        # 生成所有层的分区激活
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        for vec in self._intermediate_activations:
+            partitioning, step = self.generate_partitioning(vec, times)
+            self._partitioning_activations.append(partitioning)
+            self._partitioning_step.append(step)
+
+        num_layers = self.config.num_hidden_layers
+
+        # 逐层进行批量推理
+        for layer_idx in range(num_layers):
+            self.model.layers[layer_idx].mlp.down_proj.weight.requires_grad = True
+
+            # 准备当前层的输入（重复times次）
+            layer_input_ids = self._kwargs["input_ids"].repeat(times, 1)
+            layer_attention_mask = self._kwargs["attention_mask"].repeat(times, 1)
+
+            # 获取当前层的激活
+            layer_activation = self._partitioning_activations[layer_idx]
+
+            # 注册当前层的Hook
+            hook = self._create_layer_hook(
+                target_token_idx=target_token_idx,
+                activations=layer_activation,
+                target=self.model.layers[layer_idx].mlp.down_proj,
+            )
+
             try:
                 # 尝试批量推理
                 outputs = self.model(

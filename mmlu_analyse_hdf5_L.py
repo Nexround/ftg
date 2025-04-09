@@ -168,8 +168,8 @@ if __name__ == "__main__":
     print(model.get_memory_footprint())
 
     # data parallel
-    if n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+    # if n_gpu > 1:
+    #     model = torch.nn.DataParallel(model)
 
     # model.eval()
     def get_model_size(model):

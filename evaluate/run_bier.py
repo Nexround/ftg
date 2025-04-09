@@ -48,7 +48,7 @@ def get_bm_25_results_retriever(dataset_name, corpus, queries):
     #### Provide parameters for Elasticsearch
     hostname = "localhost"  # localhost
     index_name = dataset_name.replace("/", "__")
-    initialize = True  # False
+    initialize = False  # False
 
     language = (
         "cjk"
@@ -191,8 +191,8 @@ dataset_names = [
 ]
 
 lightbl_ce, lightbl_name = (
-    LBCrossEncoder("/cache/models/loki_reranker_qwen2_5-0-5b-5_invert_real"),
-    "loki_reranker_qwen2_5-0-5b-5_invert",
+    LBCrossEncoder("/cache/models/loki_reranker_qwen2_5-0-5b-20_averaged_real"),
+    "loki_reranker_qwen2_5-0-5b-20_averaged",
 )
 
 
