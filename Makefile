@@ -118,7 +118,7 @@ lm_mmlu_hdf5_20:
 		--output_dir ./hdf5 \
 		--max_seq_length 32768 \
 		--times 20 \
-		--result_file mmlu_20steps_qwen.h5 \
+		--result_file mmlu_20steps_qwen_part1.h5 \
 		--write_mode w
 
 lm_mmlu_qwen7b_hdf5:
