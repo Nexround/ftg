@@ -67,16 +67,16 @@ class LoKIQwen2ForCausalLM(Qwen2ForCausalLM):
             # 获取目标层设备信息
             original_layer = self.model.layers[layer_idx].mlp.down_proj
             device = original_layer.weight.device
+            if len(self.target_neurons[layer_idx]) > 0:
+                # 初始化LoKILinear
+                new_layer = LoKILinear(
+                    original_linear=original_layer,
+                    target_neurons=self.target_neurons[layer_idx],  # 自定义参数
+                ).to(device)
 
-            # 初始化LoKILinear
-            new_layer = LoKILinear(
-                original_linear=original_layer,
-                target_neurons=self.target_neurons[layer_idx],  # 自定义参数
-            ).to(device)
-
-            # 安全替换（保持梯度追踪）
-            setattr(self.model.layers[layer_idx].mlp, "down_proj", new_layer)
-            print(f"成功替换层{layer_idx}")
+                # 安全替换（保持梯度追踪）
+                setattr(self.model.layers[layer_idx].mlp, "down_proj", new_layer)
+                print(f"成功替换层{layer_idx}")
             # self.model.layers[layer_idx].mlp.down_proj = new_layer  # 修改5：直接使用属性赋值
 
     def apply_selective_ffn_gradient_masking(self):

@@ -82,15 +82,19 @@ def restore_loki_model(
     model_path: str,
     original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
     output_path: str = "/cache/models/loki_reranker_qwen2_5-0-5b-10_real",
-    torch_dtype: torch.dtype = torch.bfloat16
+    torch_dtype: torch.dtype = torch.bfloat16,
 ):
     with open(target_neurons_path, "r", encoding="utf-8") as f:
         target_neurons = json.load(f)
-    original_model = AutoModelForCausalLM.from_pretrained(original_model_name, torch_dtype=torch_dtype)
+    original_model = AutoModelForCausalLM.from_pretrained(
+        original_model_name, torch_dtype=torch_dtype
+    )
     safe_tensor_path = Path(model_path, "model.safetensors")
     # 遍历所有层还原参数
     for layer_idx in range(original_model.config.num_hidden_layers):
         # 获取当前层的原始结构
+        if not target_neurons[layer_idx]:
+            continue
         original_down_proj = original_model.model.layers[layer_idx].mlp.down_proj
 
         # 加载LoKI层参数
@@ -114,6 +118,33 @@ def restore_loki_model(
 
         # 合并参数到原始层
         merge_loki_weights(loki_layer, original_down_proj)
+
+    # 保存还原后的模型
+    original_model.save_pretrained(output_path)
+    tokenizer = AutoTokenizer.from_pretrained(original_model_name)
+    tokenizer.save_pretrained(output_path)
+
+
+def set_zero_weights(
+    target_neurons_path: str,
+    output_path: str,
+    original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    torch_dtype: torch.dtype = torch.bfloat16,
+):
+    with open(target_neurons_path, "r", encoding="utf-8") as f:
+        target_neurons = json.load(f)
+    original_model = AutoModelForCausalLM.from_pretrained(
+        original_model_name, torch_dtype=torch_dtype
+    )
+    for layer_idx in range(original_model.config.num_hidden_layers):
+        # 获取当前层的原始结构
+        original_down_proj = original_model.model.layers[layer_idx].mlp.down_proj
+        weight = original_down_proj.weight
+        # 遍历要置零的神经元索引
+        with torch.no_grad():
+            for neuron_idx in target_neurons[layer_idx]:
+                if neuron_idx < weight.shape[0]:  # 确保索引有效
+                    weight[neuron_idx, :] = 0.0  # 将该神经元的权重置零
 
     # 保存还原后的模型
     original_model.save_pretrained(output_path)

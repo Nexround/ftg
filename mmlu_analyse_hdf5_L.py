@@ -17,27 +17,6 @@ from src.module.Llama3Model import CustomLlamaForCausalLM
 torch.set_float32_matmul_precision("medium")
 
 mmlu_all_sets = [
-    "college_biology",
-    "college_chemistry",
-    "college_computer_science",
-    "college_mathematics",
-    "college_physics",
-    "electrical_engineering",
-    "astronomy",
-    "anatomy",
-    "abstract_algebra",
-    "machine_learning",
-    "clinical_knowledge",
-    "global_facts",
-    "management",
-    "nutrition",
-    "marketing",
-    "professional_accounting",
-    "high_school_geography",
-    "international_law",
-    "moral_scenarios",
-    "computer_security",
-    "high_school_microeconomics",
     "professional_law",
     "medical_genetics",
     "professional_psychology",
@@ -177,34 +156,11 @@ if __name__ == "__main__":
         return param_size / 1024**2  # 转换为 MB
 
     print(f"Model Weights Memory: {get_model_size(model):.2f} MB")
-
-    def build_conversation(subset, train_samples, test_sample):
+    def build_conversation(subset, test_sample):
         conversation = []
         subject = subset.replace("_", " ").title()
 
-        # 添加few-shot示例
-        for example in train_samples:
-            # 用户问题
-            human_msg = {
-                "role": "user",
-                "content": f"There is a single choice question about {subject}. Answer the question by replying A, B, C or D.\n"
-                f"Question: {example['question']}\n"
-                f"Choices:\n"
-                + "\n".join(
-                    [
-                        f"{chr(65+i)}. {choice}"
-                        for i, choice in enumerate(example["choices"])
-                    ]
-                )
-                + "\nAnswer: \n",
-            }
-
-            # 模型回答
-            bot_msg = {"role": "assistant", "content": f"{chr(65+example['answer'])}\n"}
-
-            conversation.extend([human_msg, bot_msg])
-
-        # 添加测试问题
+        # 直接添加测试问题
         test_human_msg = {
             "role": "user",
             "content": f"There is a single choice question about {subject}. Answer the question by replying A, B, C or D.\n"
@@ -222,6 +178,7 @@ if __name__ == "__main__":
 
         return conversation
 
+
     # fw = jsonlines.open(
     #     os.path.join(args.output_dir, args.result_file),
     #     mode=args.write_mode if args.write_mode is not None else "w",
@@ -229,7 +186,6 @@ if __name__ == "__main__":
     for subset in tqdm(mmlu_all_sets, desc="📦"):
         dataset = load_dataset("cais/mmlu", subset)
         test_dataset = dataset["test"]
-        few_shot_samples = dataset["dev"]
         for idx, test_sample in tqdm(
             enumerate(test_dataset),
             desc=f"🗂️ Evaluating {subset}",
@@ -238,7 +194,7 @@ if __name__ == "__main__":
         ):
 
             # 构建对话历史
-            conversation = build_conversation(subset, few_shot_samples, test_sample)
+            conversation = build_conversation(subset, test_sample)
             inputs = tokenizer.apply_chat_template(
                 conversation,
                 add_generation_prompt=True,

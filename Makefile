@@ -136,11 +136,11 @@ lm_mmlu_llama8b_hdf5:
 	accelerate launch \
 		--mixed_precision bf16 \
 		mmlu_analyse_hdf5_L.py \
-		--model_path ~/Llama3_8B \
+		--model_path /cache/models/Meta-Llama-3.1-8B-Instruct \
 		--output_dir ./hdf5 \
 		--max_seq_length 32768 \
 		--times 7 \
-		--result_file Llama3_8B_mmlu.h5 \
+		--result_file Llama3_p.h5 \
 		--write_mode w
 
 token_cls_agnews:
