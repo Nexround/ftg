@@ -14,7 +14,7 @@ class LoKILinear(nn.Module):
 
         # 参数验证
         if not all(0 <= idx < self.out_features for idx in self.active_pos):
-            raise ValueError(f"激活索引必须在[0, {self.out_features-1}]范围内")
+            raise ValueError(f"激活索引必须在[0, {self.out_features - 1}]范围内")
         if len(self.active_pos) != len(set(self.active_pos)):
             raise ValueError("激活索引包含重复值")
 
@@ -65,6 +65,62 @@ class LoKILinear(nn.Module):
         )
 
 
+class LoKILinear_i(nn.Module):
+    def __init__(self, original_linear, target_neurons):
+        super().__init__()
+        self.out_features = original_linear.out_features
+        self.in_features = original_linear.in_features
+        self.active_pos = sorted(target_neurons)
+        self.fixed_pos = [
+            i for i in range(self.in_features) if i not in self.active_pos
+        ]
+
+        # 参数验证
+        if not all(0 <= idx < self.in_features for idx in self.active_pos):
+            raise ValueError(f"激活索引必须在[0, {self.in_features - 1}]范围内")
+        if len(self.active_pos) != len(set(self.active_pos)):
+            raise ValueError("激活索引包含重复值")
+
+        # 分割权重矩阵的列
+        W = original_linear.weight.data
+        self.active_weight = nn.Parameter(
+            W[:, self.active_pos].clone(), requires_grad=True
+        )
+        self.fixed_weight = nn.Parameter(
+            W[:, self.fixed_pos].clone(), requires_grad=False
+        )
+
+        # 处理偏置项
+        if original_linear.bias is not None:
+            self.bias = nn.Parameter(
+                original_linear.bias.data.clone(), requires_grad=True
+            )
+        else:
+            self.bias = None
+
+        # 生成输入特征重排索引
+        self.register_buffer(
+            "input_permutation",
+            torch.tensor(self.active_pos + self.fixed_pos, dtype=torch.long),
+        )
+
+    def forward(self, x):
+        # 合并权重矩阵
+        weight = torch.cat([self.active_weight, self.fixed_weight], dim=1)
+
+        # 重排输入特征顺序
+        x_reordered = x.index_select(-1, self.input_permutation)
+
+        # 矩阵乘法
+        output = torch.matmul(x_reordered, weight.transpose(-1, -2))
+
+        # 添加偏置项
+        if self.bias is not None:
+            output += self.bias.unsqueeze(0).expand_as(output)
+
+        return output
+
+
 def replace_all_target_linear_qwen(model, active_neurons):
     for layer_idx in range(model.config.num_hidden_layers):
         target_linear = model.model.layers[layer_idx].mlp.down_proj
@@ -95,7 +151,9 @@ def restore_original_linears(model):
             # 合并权重矩阵
             device = loki_layer.active_weight.device
             combined_weight = torch.zeros(
-                (loki_layer.out_features, loki_layer.in_features), device=device, dtype=torch.bfloat16
+                (loki_layer.out_features, loki_layer.in_features),
+                device=device,
+                dtype=torch.bfloat16,
             )
             combined_weight[loki_layer.active_pos] = loki_layer.active_weight.data
             combined_weight[loki_layer.fixed_pos] = loki_layer.fixed_weight.data

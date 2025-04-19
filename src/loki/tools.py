@@ -2,7 +2,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import json
 import torch
 from .loki_qwen_config import LoKIQwen2Config
-from .loki_qwen_model import LoKIQwen2ForCausalLM
+from .loki_qwen_model import LoKIQwen2ForCausalLM, LoKIQwen2ForCausalLM_i
 from .loki_linear import LoKILinear
 
 from safetensors import safe_open
@@ -43,6 +43,56 @@ def create_and_save_loki_model(
 
     # 加载LoKI模型
     loki_model = LoKIQwen2ForCausalLM.from_pretrained(
+        pretrained_model_name_or_path=model_name,
+        config=loki_config,
+        torch_dtype=torch_dtype,
+    )
+
+    # 保存模型和tokenizer
+    loki_model.save_pretrained(save_dir)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.save_pretrained(save_dir)
+
+    # 保存原始模型参数（可选）
+    original_model.save_pretrained(save_dir, is_main_process=False)
+
+    print("Done.")
+
+
+def create_and_save_loki_model_i(
+    target_neurons_path: str,
+    save_dir: str,
+    model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    torch_dtype: torch.dtype = torch.bfloat16,
+) -> None:
+    """
+    创建并保存LoKI自定义模型
+
+    参数:
+    target_neurons_path: 目标神经元配置文件路径
+    save_dir: 模型保存目录
+    model_name: 基础模型名称，默认为"Qwen/Qwen2.5-0.5B-Instruct"
+    torch_dtype: 模型精度，默认为torch.bfloat16
+    """
+    # 加载目标神经元配置
+    with open(target_neurons_path, "r", encoding="utf-8") as f:
+        target_neurons = json.load(f)
+
+    # 加载原始模型
+    original_model = AutoModelForCausalLM.from_pretrained(
+        model_name, torch_dtype=torch_dtype
+    )
+
+    # 注册自定义模型类到AutoClass
+    LoKIQwen2ForCausalLM_i.register_for_auto_class("AutoModelForCausalLM")
+    LoKIQwen2Config.register_for_auto_class()
+
+    # 创建LoKI配置
+    loki_config = LoKIQwen2Config.from_pretrained(model_name)
+    loki_config.target_neurons = target_neurons
+
+    # 加载LoKI模型
+    loki_model = LoKIQwen2ForCausalLM_i.from_pretrained(
         pretrained_model_name_or_path=model_name,
         config=loki_config,
         torch_dtype=torch_dtype,
