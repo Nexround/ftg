@@ -3,7 +3,7 @@ import json
 import torch
 from .loki_qwen_config import LoKIQwen2Config
 from .loki_qwen_model import LoKIQwen2ForCausalLM, LoKIQwen2ForCausalLM_i
-from .loki_linear import LoKILinear
+from .loki_linear import LoKILinear, LoKILinear_i
 
 from safetensors import safe_open
 from pathlib import Path
@@ -173,6 +173,83 @@ def restore_loki_model(
     original_model.save_pretrained(output_path)
     tokenizer = AutoTokenizer.from_pretrained(original_model_name)
     tokenizer.save_pretrained(output_path)
+
+
+def restore_loki_model_i(
+    target_neurons_path: str,
+    model_path: str,
+    original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    output_path: str = "/cache/models/loki_reranker_qwen2_5-0-5b-10_real",
+    torch_dtype: torch.dtype = torch.bfloat16,
+):
+    with open(target_neurons_path, "r", encoding="utf-8") as f:
+        target_neurons = json.load(f)
+
+    # 加载原始模型
+    original_model = AutoModelForCausalLM.from_pretrained(
+        original_model_name, torch_dtype=torch_dtype
+    )
+
+    # 参数合并函数
+    def merge_weights(loki_layer, original_layer):
+        """合并列分割的权重到原始层"""
+        # 合并active和fixed列
+        merged_weights = torch.cat(
+            [loki_layer.active_weight, loki_layer.fixed_weight], dim=1
+        )
+
+        # 生成逆排列索引
+        permuted_indices = loki_layer.active_pos + loki_layer.fixed_pos
+        inv_perm = torch.argsort(torch.tensor(permuted_indices))
+
+        # 还原权重矩阵原始顺序
+        original_layer.weight.data.copy_(merged_weights[:, inv_perm])
+
+        # 还原偏置项
+        if original_layer.bias is not None:
+            original_layer.bias.data.copy_(loki_layer.bias.data)
+
+    # 加载安全张量文件
+    safe_tensor_path = Path(model_path) / "model.safetensors"
+
+    with safe_open(safe_tensor_path, framework="pt") as f:
+        for layer_idx in range(original_model.config.num_hidden_layers):
+            if not target_neurons[layer_idx]:
+                continue
+
+            # 获取原始层引用
+            original_proj = original_model.model.layers[layer_idx].mlp.down_proj
+
+            try:
+                # 初始化LoKI层并加载参数
+                loki_layer = LoKILinear_i(
+                    original_proj, target_neurons=target_neurons[layer_idx]
+                )
+
+                # 构建状态字典
+                state_dict = {
+                    "active_weight": f.get_tensor(
+                        f"model.layers.{layer_idx}.mlp.down_proj.active_weight"
+                    ),
+                    "fixed_weight": f.get_tensor(
+                        f"model.layers.{layer_idx}.mlp.down_proj.fixed_weight"
+                    ),
+                }
+
+                loki_layer.load_state_dict(state_dict, strict=False)
+
+                # 合并参数到原始层
+                merge_weights(loki_layer, original_proj)
+
+            except KeyError as e:
+                print(f"跳过第{layer_idx}层: {str(e)}")
+                continue
+
+    # 保存还原后的模型
+    original_model.save_pretrained(output_path)
+    tokenizer = AutoTokenizer.from_pretrained(original_model_name)
+    tokenizer.save_pretrained(output_path)
+    print(f"模型已保存至: {output_path}")
 
 
 def set_zero_weights(
