@@ -2,7 +2,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import json
 import torch
 from .loki_qwen_config import LoKIQwen2Config
+from .loki_llama_config import LoKILlamaConfig
+
 from .loki_qwen_model import LoKIQwen2ForCausalLM, LoKIQwen2ForCausalLM_i
+from .loki_llama_model import LoKILlamaForCausalLM
 from .loki_linear import LoKILinear, LoKILinear_i
 
 from safetensors import safe_open
@@ -43,6 +46,55 @@ def create_and_save_loki_model(
 
     # 加载LoKI模型
     loki_model = LoKIQwen2ForCausalLM.from_pretrained(
+        pretrained_model_name_or_path=model_name,
+        config=loki_config,
+        torch_dtype=torch_dtype,
+    )
+
+    # 保存模型和tokenizer
+    loki_model.save_pretrained(save_dir)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.save_pretrained(save_dir)
+
+    # 保存原始模型参数（可选）
+    original_model.save_pretrained(save_dir, is_main_process=False)
+
+    print("Done.")
+    
+def create_and_save_loki_model_llama(
+    target_neurons_path: str,
+    save_dir: str,
+    model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    torch_dtype: torch.dtype = torch.bfloat16,
+) -> None:
+    """
+    创建并保存LoKI自定义模型
+
+    参数:
+    target_neurons_path: 目标神经元配置文件路径
+    save_dir: 模型保存目录
+    model_name: 基础模型名称，默认为"Qwen/Qwen2.5-0.5B-Instruct"
+    torch_dtype: 模型精度，默认为torch.bfloat16
+    """
+    # 加载目标神经元配置
+    with open(target_neurons_path, "r", encoding="utf-8") as f:
+        target_neurons = json.load(f)
+
+    # 加载原始模型
+    original_model = AutoModelForCausalLM.from_pretrained(
+        model_name, torch_dtype=torch_dtype
+    )
+
+    # 注册自定义模型类到AutoClass
+    LoKILlamaForCausalLM.register_for_auto_class("AutoModelForCausalLM")
+    LoKILlamaConfig.register_for_auto_class()
+
+    # 创建LoKI配置
+    loki_config = LoKILlamaConfig.from_pretrained(model_name)
+    loki_config.target_neurons = target_neurons
+
+    # 加载LoKI模型
+    loki_model = LoKILlamaForCausalLM.from_pretrained(
         pretrained_model_name_or_path=model_name,
         config=loki_config,
         torch_dtype=torch_dtype,
@@ -165,6 +217,72 @@ def restore_loki_model(
                 },
                 strict=True,
             )
+
+        # 合并参数到原始层
+        merge_loki_weights(loki_layer, original_down_proj)
+
+    # 保存还原后的模型
+    original_model.save_pretrained(output_path)
+    tokenizer = AutoTokenizer.from_pretrained(original_model_name)
+    tokenizer.save_pretrained(output_path)
+    
+
+from glob import glob
+
+def restore_loki_model_(
+    target_neurons_path: str,
+    model_path: str,
+    original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    output_path: str = "/cache/models/loki_reranker_qwen2_5-0-5b-10_real",
+    torch_dtype: torch.dtype = torch.bfloat16,
+):
+    # 加载目标神经元配置
+    with open(target_neurons_path, "r", encoding="utf-8") as f:
+        target_neurons = json.load(f)
+    
+    # 加载原始模型
+    original_model = AutoModelForCausalLM.from_pretrained(
+        original_model_name, torch_dtype=torch_dtype
+    )
+    
+    # 加载所有分片文件 ----------------------------------------------------
+    # 获取分片文件列表并按顺序排序
+    shard_files = sorted(glob(f"{model_path}/model-*-of-*.safetensors"))
+    
+    # 合并所有分片的张量到内存
+    tensors = {}
+    for shard_file in shard_files:
+        with safe_open(shard_file, framework="pt") as f:
+            for key in f.keys():
+                tensors[key] = f.get_tensor(key)
+    # ---------------------------------------------------------------------
+
+    # 遍历所有层还原参数
+    for layer_idx in range(original_model.config.num_hidden_layers):
+        if not target_neurons[layer_idx]:
+            continue
+        
+        original_down_proj = original_model.model.layers[layer_idx].mlp.down_proj
+
+        # 从合并的张量中加载参数 ----------------------------------------------
+        loki_layer = LoKILinear(
+            original_down_proj, target_neurons=target_neurons[layer_idx]
+        )
+        
+        # 构造参数键名
+        active_weight_key = f"model.layers.{layer_idx}.mlp.down_proj.active_weight"
+        fixed_weight_key = f"model.layers.{layer_idx}.mlp.down_proj.fixed_weight"
+        
+        # 从预加载的张量字典中获取参数
+        loki_layer.load_state_dict(
+            {
+                "active_weight": tensors[active_weight_key],
+                "fixed_weight": tensors[fixed_weight_key],
+                "index_map": loki_layer.index_map,  # 该参数由LoKILinear内部生成
+            },
+            strict=True,
+        )
+        # ---------------------------------------------------------------------
 
         # 合并参数到原始层
         merge_loki_weights(loki_layer, original_down_proj)
