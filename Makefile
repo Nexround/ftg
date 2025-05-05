@@ -154,6 +154,15 @@ lm_mmlu_llama8b_hdf5:
 		--result_file Llama3_p.h5 \
 		--write_mode w
 
+lm_mmlu_llama2_hdf5:
+	python mmlu_analyse_hdf5_Llama2.py \
+		--model_path /cache/models/official_models/Llama-2-7b-hf \
+		--output_dir ./hdf5 \
+		--max_seq_length 32768 \
+		--times 7 \
+		--result_file Llama2.h5 \
+		--write_mode w
+
 token_cls_agnews:
 	python ./src/token_cls.py \
 	--bert_model /openbayes/home/ftg/results/agnews_checkpoint-22500 \

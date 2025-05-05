@@ -395,3 +395,69 @@ def set_zero_weights(
     original_model.save_pretrained(output_path)
     tokenizer = AutoTokenizer.from_pretrained(original_model_name)
     tokenizer.save_pretrained(output_path)
+
+def restore_loki_model(
+    target_neurons_path: str,
+    model_path: str,
+    original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    output_path: str = "/cache/models/loki_reranker_qwen2_5-0-5b-10_real",
+    torch_dtype: torch.dtype = torch.bfloat16,
+):
+    # Load target neuron configuration
+    with open(target_neurons_path, "r", encoding="utf-8") as f:
+        target_neurons = json.load(f)
+
+    # Load original model
+    original_model = AutoModelForCausalLM.from_pretrained(
+        original_model_name, torch_dtype=torch_dtype
+    )
+
+    # Prepare tensor source: single safe tensor or shards
+    safe_tensor_path = Path(model_path) / "model.safetensors"
+    if safe_tensor_path.is_file():
+        # Single-file safetensors
+        tensor_dict = {}
+        with safe_open(safe_tensor_path, framework="pt") as f:
+            for key in f.keys():
+                tensor_dict[key] = f.get_tensor(key)
+    else:
+        # Multiple safetensors shards
+        tensor_dict = {}
+        shard_files = sorted(glob(f"{model_path}/model-*-of-*.safetensors"))
+        for shard_file in shard_files:
+            with safe_open(shard_file, framework="pt") as f:
+                for key in f.keys():
+                    tensor_dict[key] = f.get_tensor(key)
+
+    # Iterate through layers and restore parameters
+    for layer_idx in range(original_model.config.num_hidden_layers):
+        if not target_neurons[layer_idx]:
+            continue
+
+        original_down_proj = original_model.model.layers[layer_idx].mlp.down_proj
+       
+        # Create LoKI layer and load weights from tensor_dict
+        loki_layer = LoKILinear(
+            original_down_proj, target_neurons=target_neurons[layer_idx]
+        )
+        active_key = f"model.layers.{layer_idx}.mlp.down_proj.active_weight"
+        fixed_key = f"model.layers.{layer_idx}.mlp.down_proj.fixed_weight"
+        loki_layer.load_state_dict(
+            {
+                "active_weight": tensor_dict[active_key],
+                "fixed_weight": tensor_dict[fixed_key],
+                # index_map is generated internally
+                "index_map": loki_layer.index_map,
+            },
+            strict=True,
+        )
+
+        # Merge LoKI weights into original layer
+        merge_loki_weights(loki_layer, original_down_proj)
+
+    # Save the restored model and tokenizer
+    original_model.save_pretrained(output_path)
+    tokenizer = AutoTokenizer.from_pretrained(original_model_name)
+    tokenizer.save_pretrained(output_path)
+
+    print(f"Model restored and saved to {output_path}")

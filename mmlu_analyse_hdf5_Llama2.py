@@ -12,13 +12,13 @@ from src.module.func import (
     save_array_to_hdf5,
     parse_comma_separated,
 )
-from src.module.Llama3Model import CustomLlamaForCausalLM
+from src.module.Llama2Model import CustomLlamaForCausalLM
 
 torch.set_float32_matmul_precision("medium")
 
 mmlu_all_sets = [
-    "college_biology",
     "professional_law",
+    "college_biology",
     "college_chemistry",
     "college_computer_science",
     "college_mathematics",
@@ -26,54 +26,54 @@ mmlu_all_sets = [
     "electrical_engineering",
     "astronomy",
     "anatomy",
-    "abstract_algebra",
-    "machine_learning",
-    "clinical_knowledge",
-    "global_facts",
-    "management",
-    "nutrition",
-    "marketing",
-    "professional_accounting",
-    "high_school_geography",
-    "international_law",
-    "moral_scenarios",
-    "computer_security",
-    "high_school_microeconomics",
-    "medical_genetics",
-    "professional_psychology",
-    "jurisprudence",
-    "world_religions",
-    "philosophy",
-    "virology",
-    "high_school_chemistry",
-    "public_relations",
-    "high_school_macroeconomics",
-    "human_sexuality",
-    "elementary_mathematics",
-    "high_school_physics",
-    "high_school_computer_science",
-    "high_school_european_history",
-    "business_ethics",
-    "moral_disputes",
-    "high_school_statistics",
-    "miscellaneous",
-    "formal_logic",
-    "high_school_government_and_politics",
-    "prehistory",
-    "security_studies",
-    "high_school_biology",
-    "logical_fallacies",
-    "high_school_world_history",
-    "professional_medicine",
-    "high_school_mathematics",
-    "college_medicine",
-    "high_school_us_history",
-    "sociology",
-    "econometrics",
-    "high_school_psychology",
-    "human_aging",
-    "us_foreign_policy",
-    "conceptual_physics",
+    # "abstract_algebra",
+    # "machine_learning",
+    # "clinical_knowledge",
+    # "global_facts",
+    # "management",
+    # "nutrition",
+    # "marketing",
+    # "professional_accounting",
+    # "high_school_geography",
+    # "international_law",
+    # "moral_scenarios",
+    # "computer_security",
+    # "high_school_microeconomics",
+    # "medical_genetics",
+    # "professional_psychology",
+    # "jurisprudence",
+    # "world_religions",
+    # "philosophy",
+    # "virology",
+    # "high_school_chemistry",
+    # "public_relations",
+    # "high_school_macroeconomics",
+    # "human_sexuality",
+    # "elementary_mathematics",
+    # "high_school_physics",
+    # "high_school_computer_science",
+    # "high_school_european_history",
+    # "business_ethics",
+    # "moral_disputes",
+    # "high_school_statistics",
+    # "miscellaneous",
+    # "formal_logic",
+    # "high_school_government_and_politics",
+    # "prehistory",
+    # "security_studies",
+    # "high_school_biology",
+    # "logical_fallacies",
+    # "high_school_world_history",
+    # "professional_medicine",
+    # "high_school_mathematics",
+    # "college_medicine",
+    # "high_school_us_history",
+    # "sociology",
+    # "econometrics",
+    # "high_school_psychology",
+    # "human_aging",
+    # "us_foreign_policy",
+    # "conceptual_physics",
 ]
 # for subset in tqdm(mmlu_all_sets):
 #     load_dataset("cais/mmlu", subset)
@@ -160,7 +160,8 @@ if __name__ == "__main__":
         device_map="auto",
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-    model = torch.compile(model)
+    # model = torch.compile(model)
+    # model.half()
 
     # model.gradient_checkpointing_enable() # 目前看来没什么用
     # model.model.embed_tokens.to("cpu")
@@ -178,28 +179,21 @@ if __name__ == "__main__":
 
     print(f"Model Weights Memory: {get_model_size(model):.2f} MB")
     def build_conversation(subset, test_sample):
-        conversation = []
         subject = subset.replace("_", " ").title()
 
-        # 直接添加测试问题
-        test_human_msg = {
-            "role": "user",
-            "content": f"There is a single choice question about {subject}. Answer the question by replying A, B, C or D.\n"
-            f"Question: {test_sample['question']}\n"
-            f"Choices:\n"
-            + "\n".join(
-                [
-                    f"{chr(65+i)}. {choice}"
-                    for i, choice in enumerate(test_sample["choices"])
-                ]
-            )
-            + "\nAnswer: \n",
-        }
-        conversation.append(test_human_msg)
+        # Construct the prompt as a simple question and choices format
+        prompt = f"There is a single choice question about {subject}. Answer the question by replying A, B, C, or D.\n"
+        prompt += f"Question: {test_sample['question']}\n"
+        prompt += "Choices:\n"
+        for i, choice in enumerate(test_sample['choices']):
+            prompt += f"{chr(65 + i)}. {choice}\n"
+        
+        # Prompt ends with instruction for the model to predict the answer
+        prompt += "Answer: \n"
 
-        return conversation
+        return prompt
 
-
+    tokenizer.pad_token = tokenizer.eos_token
     # fw = jsonlines.open(
     #     os.path.join(args.output_dir, args.result_file),
     #     mode=args.write_mode if args.write_mode is not None else "w",
@@ -215,12 +209,15 @@ if __name__ == "__main__":
         ):
 
             # 构建对话历史
-            conversation = build_conversation(subset, test_sample)
-            inputs = tokenizer.apply_chat_template(
-                conversation,
-                add_generation_prompt=True,
+            prompt = build_conversation(subset, test_sample)
+            # print(f"Prompt: {prompt}")
+            inputs = tokenizer(
+                prompt,
+                # add_special_tokens=True,
+                # max_length=args.max_seq_length,
+                # truncation=True,
+                # padding="max_length",
                 return_tensors="pt",
-                return_dict=True,  # 返回input_ids和attention_mask
             ).to(device)
             inputs["attention_mask"] = inputs["attention_mask"].to(torch.int8)
             # record running time
@@ -232,8 +229,10 @@ if __name__ == "__main__":
                 target_token_idx=-1,
                 # use_cache=False,
             )
-            predicted_label = int(torch.argmax(logits, dim=-1))  # 预测类别
-            print(tokenizer.decode([predicted_label]))
+            predicted_label = torch.argmax(logits, dim=-1)[0]  # 预测类别
+            # predicted_label = torch.argmax(logits, dim=-1)
+            # print("Predicted label: ", predicted_label)
+            print("Output: "+tokenizer.decode(token_ids=predicted_label))
             model.forward_with_partitioning(
                 target_token_idx=-1, times=args.times, predicted_label=predicted_label
             )

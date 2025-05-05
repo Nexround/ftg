@@ -1,7 +1,7 @@
-
 from transformers import LlamaForCausalLM
 import torch
 import torch.nn.functional as F
+import gc
 
 
 class CustomLlamaForCausalLM(LlamaForCausalLM):
@@ -37,15 +37,15 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
         hooks = []
         for layer in self.model.layers:
             hooks.append(layer.mlp.down_proj.register_forward_hook(hook_fn))
-
-        outputs = super().forward(*args, **kwargs).logits[:, target_token_idx, :]
+        logits = super().forward(*args, **kwargs).logits
+        outputs = logits[:, target_token_idx, :]
         # 只返回指定位置的logits
         for hook in hooks:
             hook.remove()
 
         return outputs
 
-    def forward_with_partitioning(self, target_token_idx, times, predicted_label):
+    def _forward_with_partitioning(self, target_token_idx, times, predicted_label):
         # 生成所有层的分区激活
         for param in self.model.parameters():
             param.requires_grad = False
@@ -60,7 +60,6 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
         # 逐层进行批量推理
         for layer_idx in range(num_layers):
             self.model.layers[layer_idx].mlp.down_proj.weight.requires_grad = True
-
 
             # 获取当前层的激活
             layer_activation = self._partitioning_activations[layer_idx]
@@ -91,28 +90,29 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
 
                 target_label_logits = prob[:, predicted_label]
 
-                
                 (gradient,) = torch.autograd.grad(
                     target_label_logits,
                     single_layer_activation,
                     grad_outputs=torch.ones_like(target_label_logits),
-
                 )
-
 
                 gradient = gradient.detach().cpu()
 
                 # 清理
                 hook.remove()
                 with torch.no_grad():
-                    self.integrated_gradients[layer_idx] = torch.zeros_like(gradient.squeeze(0))
-                    self.integrated_gradients[layer_idx] += gradient.squeeze(0) * self._partitioning_step[layer_idx]
+                    self.integrated_gradients[layer_idx] = torch.zeros_like(
+                        gradient.squeeze(0)
+                    )
+                    self.integrated_gradients[layer_idx] += (
+                        gradient.squeeze(0) * self._partitioning_step[layer_idx]
+                    )
 
             self.model.layers[layer_idx].mlp.down_proj.weight.requires_grad = False
 
-
         return self._partitioning_logits
-    def _forward_with_partitioning(self, target_token_idx, times, predicted_label):
+
+    def forward_with_partitioning(self, target_token_idx, times, predicted_label):
         # 生成所有层的分区激活
         for param in self.model.parameters():
             param.requires_grad = False
@@ -160,7 +160,10 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
                     if "hook" in locals():
                         hook.remove()
                     # 清空缓存
+                    # del outputs, layer_logits
                     self.reset_model()
+                    gc.collect()
+
 
                     # 逐个样本处理
                     for i in range(times):
@@ -204,6 +207,7 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
                     print(param.grad)
 
         return self._partitioning_logits
+
     def _create_layer_hook(self, target_token_idx, activations, target):
         def hook_fn(module, input, output):
             output = output.clone()
@@ -240,16 +244,6 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
             self.integrated_gradients[i] = (
                 gradient.sum(dim=0) * self._partitioning_step[i]
             )
-    def reset_model(self):
-        # 重置梯度
-        for param in self.model.parameters():
-            if param.grad is not None:
-                param.grad.detach_()
-                param.grad.zero_()
-        
-        # 清空CUDA缓存（可选）
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
     def clean(self):
         attrs = [
@@ -264,3 +258,11 @@ class CustomLlamaForCausalLM(LlamaForCausalLM):
         self.integrated_gradients = [None] * self.config.num_hidden_layers
         self._args = None
         self._kwargs = None
+        
+    def reset_model(self):
+        # 重置梯度
+        self.model.zero_grad(set_to_none=True)
+        
+        # 清空CUDA缓存（可选）
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
