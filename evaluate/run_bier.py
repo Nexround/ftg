@@ -191,8 +191,8 @@ dataset_names = [
 ]
 
 lightbl_ce, lightbl_name = (
-    LBCrossEncoder("/cache/models/ablation_models/global_lowest_10_real"),
-    "global_lowest_10",
+    LBCrossEncoder("/cache/models/LoKI_models/loki_5_a_0506_real"),
+    "loki_5_a_0506",
 )
 
 

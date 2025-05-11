@@ -107,7 +107,7 @@ lm_mmlu_hdf5:
 		--output_dir ./hdf5 \
 		--max_seq_length 32768 \
 		--times 7 \
-		--result_file mmlu.h5 \
+		--result_file mmlu_50_s7.h5 \
 		--write_mode w
 
 lm_mmlu_hdf5_i:

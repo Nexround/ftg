@@ -15,27 +15,7 @@ from src.module.func import (
 from src.module.Qwen2Model import CustomQwen2ForCausalLM
 
 torch.set_float32_matmul_precision("medium")
-mmlu_all_sets = [
-    "college_biology",
-    "college_chemistry",
-    "college_computer_science",
-    "college_mathematics",
-    "college_physics",
-    "electrical_engineering",
-    "astronomy",
-    "anatomy",
-    "abstract_algebra",
-    "machine_learning",
-    "clinical_knowledge",
-    "global_facts",
-    "management",
-    "nutrition",
-    "marketing",
-    "professional_accounting",
-    "high_school_geography"
-]
 # mmlu_all_sets = [
-#     "professional_law",
 #     "college_biology",
 #     "college_chemistry",
 #     "college_computer_science",
@@ -52,47 +32,67 @@ mmlu_all_sets = [
 #     "nutrition",
 #     "marketing",
 #     "professional_accounting",
-#     "high_school_geography",
-#     "international_law",
-#     "moral_scenarios",
-#     "computer_security",
-#     "high_school_microeconomics",
-#     "medical_genetics",
-#     "professional_psychology",
-#     "jurisprudence",
-#     "world_religions",
-#     "philosophy",
-#     "virology",
-#     "high_school_chemistry",
-#     "public_relations",
-#     "high_school_macroeconomics",
-#     "human_sexuality",
-#     "elementary_mathematics",
-#     "high_school_physics",
-#     "high_school_computer_science",
-#     "high_school_european_history",
-#     "business_ethics",
-#     "moral_disputes",
-#     "high_school_statistics",
-#     "miscellaneous",
-#     "formal_logic",
-#     "high_school_government_and_politics",
-#     "prehistory",
-#     "security_studies",
-#     "high_school_biology",
-#     "logical_fallacies",
-#     "high_school_world_history",
-#     "professional_medicine",
-#     "high_school_mathematics",
-#     "college_medicine",
-#     "high_school_us_history",
-#     "sociology",
-#     "econometrics",
-#     "high_school_psychology",
-#     "human_aging",
-#     "us_foreign_policy",
-#     "conceptual_physics",
+#     "high_school_geography"
 # ]
+mmlu_all_sets = [
+    'college_biology',
+    'college_chemistry',
+    'college_computer_science',
+    'college_mathematics',
+    'college_physics',
+    'electrical_engineering',
+    'astronomy',
+    'anatomy',
+    'abstract_algebra',
+    'machine_learning',
+    'clinical_knowledge',
+    'global_facts',
+    'management',
+    'nutrition',
+    'marketing',
+    'professional_accounting',
+    'high_school_geography',
+    'international_law',
+    'moral_scenarios',
+    'computer_security',
+    'high_school_microeconomics',
+    'professional_law',
+    'medical_genetics',
+    'professional_psychology',
+    'jurisprudence',
+    'world_religions',
+    'philosophy',
+    'virology',
+    'high_school_chemistry',
+    'public_relations',
+    'high_school_macroeconomics',
+    'human_sexuality',
+    'elementary_mathematics',
+    'high_school_physics',
+    'high_school_computer_science',
+    'high_school_european_history',
+    'business_ethics',
+    'moral_disputes',
+    'high_school_statistics',
+    'miscellaneous',
+    'formal_logic',
+    'high_school_government_and_politics',
+    'prehistory',
+    'security_studies',
+    'high_school_biology',
+    'logical_fallacies',
+    'high_school_world_history',
+    'professional_medicine',
+    'high_school_mathematics',
+    'college_medicine',
+    'high_school_us_history',
+    'sociology',
+    'econometrics',
+    'high_school_psychology',
+    'human_aging',
+    'us_foreign_policy',
+    'conceptual_physics',
+]
 # for subset in tqdm(mmlu_all_sets):
 #     load_dataset("cais/mmlu", subset)
 
@@ -244,9 +244,12 @@ if __name__ == "__main__":
     #     os.path.join(args.output_dir, args.result_file),
     #     mode=args.write_mode if args.write_mode is not None else "w",
     # )
+    start_time = time.time() 
     for subset in tqdm(mmlu_all_sets, desc="📦"):
         dataset = load_dataset("cais/mmlu", subset)
         test_dataset = dataset["test"]
+        test_dataset = test_dataset.select(range(50))
+
         few_shot_samples = dataset["dev"]
         for idx, test_sample in tqdm(
             enumerate(test_dataset),
@@ -283,3 +286,7 @@ if __name__ == "__main__":
             toc = time.perf_counter()
             print(f"***** Costing time: {toc - tic:0.4f} seconds *****")
             model.clean()
+            
+    end_time = time.time()  # 记录结束时间
+    elapsed_time = end_time - start_time  # 计算耗时
+    print(f"程序运行耗时: {elapsed_time:.4f} 秒")
