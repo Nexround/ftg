@@ -17,13 +17,12 @@ class LoKILinear(nn.Module):
             raise ValueError(f"激活索引必须在[0, {self.out_features - 1}]范围内")
         if len(self.active_pos) != len(set(self.active_pos)):
             raise ValueError("激活索引包含重复值")
-
+        self.active = nn.Linear(self.in_features, len(self.active_pos), bias=False)
+        self.fixed = nn.Linear(self.in_features, len(self.fixed_pos), bias=False)
         # 分割权重矩阵
         W = original_linear.weight.data
-        self.active_weight = nn.Parameter(
-            W[self.active_pos].clone(), requires_grad=True
-        )
-        self.fixed_weight = nn.Parameter(W[self.fixed_pos].clone(), requires_grad=False)
+        self.active.weight = nn.Parameter(W[self.active_pos].clone(), requires_grad=True)
+        self.fixed.weight = nn.Parameter(W[self.fixed_pos].clone(), requires_grad=False)
 
         # 处理偏置项
         if original_linear.bias is not None:
@@ -47,9 +46,9 @@ class LoKILinear(nn.Module):
         self.register_buffer("index_map", index_map)
 
     def forward(self, x):
-        # 合并权重并进行矩阵运算
-        weight = torch.cat([self.active_weight, self.fixed_weight], dim=0)
-        output = torch.matmul(x, weight.transpose(-1, -2))
+        active_out = self.active(x)  # 通过子模块计算激活部分
+        fixed_out = self.fixed(x)    # 固定部分
+        output = torch.cat([active_out, fixed_out], dim=-1)
 
         # 添加合并后的偏置
         if self.active_bias is not None:

@@ -164,8 +164,8 @@ def create_and_save_loki_model_i(
 def merge_loki_weights(loki_layer, original_linear):
     # 合并权重矩阵
     merged_weight = torch.zeros_like(original_linear.weight.data)
-    merged_weight[loki_layer.active_pos] = loki_layer.active_weight.data
-    merged_weight[loki_layer.fixed_pos] = loki_layer.fixed_weight.data
+    merged_weight[loki_layer.active_pos] = loki_layer.active.weight.data
+    merged_weight[loki_layer.fixed_pos] = loki_layer.fixed.weight.data
 
     # 合并偏置项
     if original_linear.bias is not None:
@@ -178,53 +178,52 @@ def merge_loki_weights(loki_layer, original_linear):
     if original_linear.bias is not None:
         original_linear.bias.data.copy_(merged_bias)
 
+# def restore_loki_model(
+#     target_neurons_path: str,
+#     model_path: str,
+#     original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+#     output_path: str = "/cache/models/loki_reranker_qwen2_5-0-5b-10_real",
+#     torch_dtype: torch.dtype = torch.bfloat16,
+# ):
+#     with open(target_neurons_path, "r", encoding="utf-8") as f:
+#         target_neurons = json.load(f)
+#     original_model = AutoModelForCausalLM.from_pretrained(
+#         original_model_name, torch_dtype=torch_dtype
+#     )
+#     safe_tensor_path = Path(model_path, "model.safetensors")
+#     # 遍历所有层还原参数
+#     for layer_idx in range(original_model.config.num_hidden_layers):
+#         # 获取当前层的原始结构
+#         if not target_neurons[layer_idx]:
+#             continue
+#         original_down_proj = original_model.model.layers[layer_idx].mlp.down_proj
 
-def restore_loki_model(
-    target_neurons_path: str,
-    model_path: str,
-    original_model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
-    output_path: str = "/cache/models/loki_reranker_qwen2_5-0-5b-10_real",
-    torch_dtype: torch.dtype = torch.bfloat16,
-):
-    with open(target_neurons_path, "r", encoding="utf-8") as f:
-        target_neurons = json.load(f)
-    original_model = AutoModelForCausalLM.from_pretrained(
-        original_model_name, torch_dtype=torch_dtype
-    )
-    safe_tensor_path = Path(model_path, "model.safetensors")
-    # 遍历所有层还原参数
-    for layer_idx in range(original_model.config.num_hidden_layers):
-        # 获取当前层的原始结构
-        if not target_neurons[layer_idx]:
-            continue
-        original_down_proj = original_model.model.layers[layer_idx].mlp.down_proj
+#         # 加载LoKI层参数
+#         with safe_open(safe_tensor_path, framework="pt") as f:
+#             # 创建临时LoKI层用于加载参数
+#             loki_layer = LoKILinear(
+#                 original_down_proj, target_neurons=target_neurons[layer_idx]
+#             )
+#             loki_layer.load_state_dict(
+#                 {
+#                     "active_weight": f.get_tensor(
+#                         f"model.layers.{layer_idx}.mlp.down_proj.active_weight"
+#                     ),
+#                     "fixed_weight": f.get_tensor(
+#                         f"model.layers.{layer_idx}.mlp.down_proj.fixed_weight"
+#                     ),
+#                     "index_map": loki_layer.index_map,
+#                 },
+#                 strict=True,
+#             )
 
-        # 加载LoKI层参数
-        with safe_open(safe_tensor_path, framework="pt") as f:
-            # 创建临时LoKI层用于加载参数
-            loki_layer = LoKILinear(
-                original_down_proj, target_neurons=target_neurons[layer_idx]
-            )
-            loki_layer.load_state_dict(
-                {
-                    "active_weight": f.get_tensor(
-                        f"model.layers.{layer_idx}.mlp.down_proj.active_weight"
-                    ),
-                    "fixed_weight": f.get_tensor(
-                        f"model.layers.{layer_idx}.mlp.down_proj.fixed_weight"
-                    ),
-                    "index_map": loki_layer.index_map,
-                },
-                strict=True,
-            )
+#         # 合并参数到原始层
+#         merge_loki_weights(loki_layer, original_down_proj)
 
-        # 合并参数到原始层
-        merge_loki_weights(loki_layer, original_down_proj)
-
-    # 保存还原后的模型
-    original_model.save_pretrained(output_path)
-    tokenizer = AutoTokenizer.from_pretrained(original_model_name)
-    tokenizer.save_pretrained(output_path)
+#     # 保存还原后的模型
+#     original_model.save_pretrained(output_path)
+#     tokenizer = AutoTokenizer.from_pretrained(original_model_name)
+#     tokenizer.save_pretrained(output_path)
     
 
 from glob import glob
@@ -435,22 +434,36 @@ def restore_loki_model(
             continue
 
         original_down_proj = original_model.model.layers[layer_idx].mlp.down_proj
-       
+        
         # Create LoKI layer and load weights from tensor_dict
         loki_layer = LoKILinear(
             original_down_proj, target_neurons=target_neurons[layer_idx]
         )
-        active_key = f"model.layers.{layer_idx}.mlp.down_proj.active_weight"
-        fixed_key = f"model.layers.{layer_idx}.mlp.down_proj.fixed_weight"
-        loki_layer.load_state_dict(
-            {
-                "active_weight": tensor_dict[active_key],
-                "fixed_weight": tensor_dict[fixed_key],
-                # index_map is generated internally
-                "index_map": loki_layer.index_map,
-            },
-            strict=True,
-        )
+        
+        # 构造参数键名
+        state_dict = {}
+        # 加载权重参数
+        weight_keys = {
+            "active.weight": f"model.layers.{layer_idx}.mlp.down_proj.active.weight",
+            "fixed.weight": f"model.layers.{layer_idx}.mlp.down_proj.fixed.weight",
+            # "index_map": loki_layer.index_map,
+        }
+        for param_key, tensor_key in weight_keys.items():
+            if tensor_key in tensor_dict:
+                state_dict[param_key] = tensor_dict[tensor_key]
+        
+        # 加载偏置参数（如果存在）
+        if original_down_proj.bias is not None:
+            bias_keys = {
+                "active_bias": f"model.layers.{layer_idx}.mlp.down_proj.active_bias",
+                "fixed_bias": f"model.layers.{layer_idx}.mlp.down_proj.fixed_bias"
+            }
+            for param_key, tensor_key in bias_keys.items():
+                if tensor_key in tensor_dict:
+                    state_dict[param_key] = tensor_dict[tensor_key]
+
+        # 加载状态字典
+        loki_layer.load_state_dict(state_dict, strict=False)
 
         # Merge LoKI weights into original layer
         merge_loki_weights(loki_layer, original_down_proj)
